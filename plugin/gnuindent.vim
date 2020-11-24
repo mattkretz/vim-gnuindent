@@ -300,6 +300,9 @@ function! GetCxxContextTokens(from, n, ...)
   " drop /* */ comments
   let context = substitute(context, '/\*.\{-}\*/', ' ', 'g')
   let context = substitute(context, '^.\{-}\ze\*/', '', '')
+  if context =~ '/\*'
+    return ['/*']
+  endif
 
   " remove char_literal and string_literal contents in case they contain any
   " of: <>(){}[]
@@ -811,6 +814,8 @@ function! GnuIndent(...)
       return base_indent
     endif
     let base_indent += extra_indent
+  elseif tokens == ['/*']
+    return cindent(lnum)
   else
     let i = s:Index(tokens, s:indent_op_token)
     while i != -1 && tokens[i] =~ '^[({\[<]$'
