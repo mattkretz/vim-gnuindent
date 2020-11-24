@@ -91,6 +91,17 @@ function! s:GetSrcLine(n)
   return substitute(s, '\s*\(//.*\)\?$', '', '')
 endfunction
 
+" lnum: line number where to align to
+" pattern: The match string determines the number of columns to indent
+"   additionally to the indent of the referenced line
+function! s:IndentForAlignment(lnum, pattern)
+  let s = getline(a:lnum)
+  let s = substitute(s, '/\*\zs.\{-}\ze\*/', {m -> repeat(' ', strlen(m[0]))}, 'g')
+  let s = substitute(s, '//\zs.*$', '', '')
+  "call s:Debug("'".s."'")
+  return indent(a:lnum) + strlen(matchstr(s, a:pattern))
+endfunction
+
 function! s:GetPrevSrcLine(lnum)
   let plnum = a:lnum - 1
   let line = s:GetSrcLine(plnum)
@@ -661,7 +672,7 @@ function! GnuIndent(...)
       " yes
       call s:Info("align to ctor initializer list")
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
-      return indent(plnum) + strlen(matchstr(getline(plnum), '^\s*\zs.*:\s*\ze'.tokens[i+1]))
+      return s:IndentForAlignment(plnum, '^\s*\zs.*:\s*\ze'.tokens[i+1])
     endif
   endif
   let ctokens = s:CxxTokenize(current)
@@ -674,8 +685,7 @@ function! GnuIndent(...)
     " inside for
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     call s:Info("align to code inside for parenthesis")
-    return indent(plnum) +
-         \ strlen(matchstr(getline(plnum), '^\s*\zs.*\<for\s*(\s*'))
+    return s:IndentForAlignment(plnum, '^\s*\zs.*\<for\s*(\s*')
   elseif tokens[-1] == ','
       \ || ctokens[0] =~ s:operators2_token
       \ || tokens[-1] =~ s:operators2_token
@@ -715,7 +725,7 @@ function! GnuIndent(...)
       endif
     endif
     if plnum >= 0
-      let previous = s:GetSrcLine(plnum)
+      let previous = getline(plnum)
       let first = 0
       let last = -1
       if tok1[-1] == '<'
@@ -795,8 +805,7 @@ function! GnuIndent(...)
       let base_indent_type = "1 shiftwidth behind identifier before opening ".tokens[j]
     endif
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
-    let base_indent = indent(plnum)
-      \ + strlen(matchstr(getline(plnum), '^\s*\zs.*\ze'.join(tokens[i:i+1], '.*')))
+    let base_indent = s:IndentForAlignment(plnum, '^\s*\zs.*\ze'.join(tokens[i:i+1], '.*'))
     if is_closing
       call s:Info("align with identifier before opening", tokens[j], base_indent, plnum, i, tokens[i:])
       return base_indent
@@ -814,15 +823,12 @@ function! GnuIndent(...)
     endwhile
     if i > 0 && i < len(tokens) - 1 && tokens[i] =~ s:assignment_op_token
       let oplnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
-      let offset_code = matchstr(getline(oplnum), '^\s*\zs.\{-}'.tokens[i].'\s*')
-      let base_indent = indent(oplnum) + strlen(offset_code)
-      let base_indent_type = "align to assignment operator: '".offset_code."'"
+      let base_indent = s:IndentForAlignment(oplnum, '^\s*\zs.\{-}'.tokens[i].'\s*')
+      let base_indent_type = "align to assignment operator"
     elseif i > 0 && i < len(tokens) - 1
-      let pattern = '^\s*\zs.\{-}\ze'.tokens[i]
       let oplnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
-      let offset_code = matchstr(getline(oplnum), pattern)
-      let base_indent = indent(oplnum) + strlen(offset_code)
-      call s:Info("align with operator on preceding line: '".offset_code."'", i, tokens[i])
+      let base_indent = s:IndentForAlignment(oplnum, '^\s*\zs.\{-}\ze'.tokens[i])
+      call s:Info("align with operator on preceding line", i, tokens[i])
       return base_indent
     elseif tokens[0] == 'return'
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)

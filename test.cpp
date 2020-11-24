@@ -233,9 +233,9 @@ public:
 	{
 	  foo();
 	}
-      for (int i = 0; i < f((400 < g()),
-			    blah);
-	   ++i)
+      /*x*/ for ( int i = 0; i < f((400 < g()), // for()
+				   blah);
+		  ++i)
 	{
 	  foo();
 	}
