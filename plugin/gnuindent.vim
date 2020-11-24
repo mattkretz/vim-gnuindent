@@ -459,6 +459,12 @@ function! GetCxxContextTokens(from, n, ...)
     let tokens = tokens[1:]
     "call s:Debug tokens
   endwhile
+  " remove noise before a template head
+  " (e.g. _GLIBCXX_BEGIN_NAMESPACE_VERSION)
+  let template_idx = index(tokens, 'template')
+  if template_idx > 0 && template_idx+1 < len(tokens) && tokens[template_idx+1] == '<'
+    let tokens = tokens[template_idx:]
+  endif
 
   " clean up the char_literal and string_literal placeholders
   call map(tokens, {i, v -> [v, v[0]][v == "'c'" || v == '"string_literal"']})
