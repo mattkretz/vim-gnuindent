@@ -397,7 +397,7 @@ function! GetCxxContextTokens(from, n, ...)
   let idx2 = index(tokens, '{', 1)
   let idx3 = index(tokens, '}', 1 + (tokens[0] == ';'))
   while idx3 != -1 && (count(tokens[:idx3], ')') > count(tokens[:idx3], '(')
-      \ || tokens[idx3-1] == '->')
+      \ || tokens[idx3-1] == '->' || tokens[idx3-1] == ',')
     let idx3 = index(tokens, '}', idx3 + 1)
   endwhile
   let idx3 = -1 - idx3
@@ -539,6 +539,7 @@ function! GnuIndent(...)
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
       return indent(plnum) + (tokens[0] == 'template') * &sw
     endif
+    s:Debug("fall through from block indent section")
   elseif tokens[-1] =~ 'inline\|static\|constexpr\|explicit\|extern\|const'
     call s:Info("align indent to previous line")
     let [plnum, previous] = s:GetPrevSrcLine(lnum)
@@ -608,7 +609,7 @@ function! GnuIndent(...)
         call s:Info("indent inside a new {} block:")
         return indent(plnum) + &sw * (1 - is_access_specifier)
       endif
-      " fall through to align_to_identifier_before_opening_token
+      call s:Debug("fall through to align_to_identifier_before_opening_token")
     endif
   elseif tokens[-1] == ';' && (tokens[0] != 'for' || s:IndexOfMatchingToken(tokens, 1) != -1)
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
@@ -650,6 +651,18 @@ function! GnuIndent(...)
     let line = substitute(line, s:string_literal.'[^"]*$', '', '')
     let line = substitute(line, '\t', repeat('.', &ts), 'g')
     return strlen(line)
+  elseif tokens[-1] == ',' && tokens[-2] =~ '^[)}]$' && index(tokens, ':') != -1
+    " constructor initializer list?
+    let i = s:IndexOfMatchingToken(tokens, -2) - 2
+    while i > 0 && tokens[i] == ',' && tokens[i-1] =~ '^[)}]$'
+      let i = s:IndexOfMatchingToken(tokens, i-1) - 2
+    endwhile
+    if i > 0 && tokens[i] == ':'
+      " yes
+      call s:Info("align to ctor initializer list")
+      let plnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
+      return indent(plnum) + strlen(matchstr(getline(plnum), '^\s*\zs.*:\s*\ze'.tokens[i+1]))
+    endif
   endif
   let ctokens = s:CxxTokenize(current)
   if empty(ctokens)

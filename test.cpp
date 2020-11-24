@@ -275,7 +275,20 @@ public:
   template <typename _Flags>
     _GLIBCXX_SIMD_ALWAYS_INLINE
     simd(const value_type* __mem, _Flags)
-    : simd([&](auto __i) { return __mem[__i]; }) {}
+    : simd([&](auto __i) { return __mem[__i]; }),
+      _M_data(),
+      _M_foo{1, 2},
+      _M_bar(3)
+    {}
+
+  simd()
+  :_M_data(),
+   _M_foo{}
+  {}
+
+  simd() : _M_data(),
+	   _M_foo{}
+  {}
 
   _GLIBCXX_SIMD_INTRINSIC friend constexpr
   _Base&
