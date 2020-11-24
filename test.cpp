@@ -293,6 +293,15 @@ public:
       _M_bar(3)
     {}
 
+  simd(int)
+  : public base<T, U>,
+    private other<foo, bar>,
+    protected for_good_measure<w<t<f>>>,
+    _M_data("I'm good")
+  {
+    f();
+  }
+
   simd()
   :_M_data(),
    _M_foo{}

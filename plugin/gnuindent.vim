@@ -671,11 +671,18 @@ function! GnuIndent(...)
     let line = substitute(line, s:string_literal.'[^"]*$', '', '')
     let line = substitute(line, '\t', repeat('.', &ts), 'g')
     return strlen(line)
-  elseif tokens[-1] == ',' && tokens[-2] =~ '^[)}]$' && index(tokens, ':') != -1
+  elseif tokens[-1] == ',' && tokens[-2] =~ '^[>)}]$' && index(tokens, ':') != -1
     " constructor initializer list?
     let i = s:IndexOfMatchingToken(tokens, -2) - 2
-    while i > 0 && tokens[i] == ',' && tokens[i-1] =~ '^[)}]$'
-      let i = s:IndexOfMatchingToken(tokens, i-1) - 2
+    while i > 0
+      if tokens[i] =~ '^p\%(ublic\|rivate\|rotected\)$'
+        let i -= 1
+      endif
+      if tokens[i] == ',' && tokens[i-1] =~ '^[>)}]$'
+        let i = s:IndexOfMatchingToken(tokens, i-1) - 2
+      else
+        break
+      endif
     endwhile
     if i > 0 && tokens[i] == ':'
       " yes
