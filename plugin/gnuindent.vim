@@ -144,7 +144,7 @@ let s:encoding_prefix_opt = '\%(u8\|[uUL]\)\?'
 let s:escape_sequence = '\\[''"?\\abfnrtv]\|\\\o\{1,3}\|\\x\x\x\?'
 let s:char_literal = s:encoding_prefix_opt.'''\%([^''\\]\|'.s:escape_sequence.'\)'''
 let s:string_literal = s:encoding_prefix_opt.'\%("\%([^"\\]\|\\[uU]\%(\x\{4}\)\{1,2}\|'.s:escape_sequence.'\)*"\|R"\([^(]*\)(.\{-})\1"\)'
-let s:operators1 = '&&\|||\|<=>\|[|&^!=<>*/%+-]=\|<<\|>>\|::\|\.\.\.\|[~,:?|&^!=<>*/%+-]'
+let s:operators1 = '++\|--\|&&\|||\|<=>\|[|&^!=<>*/%+-]=\|<<\|>>\|::\|\.\.\.\|[~,:?|&^!=<>*/%+-]'
 let s:operators2 = '->\*\?\|\.\*\?\|[()\[\]]\|'.s:operators1
 let cxx_tokenize = '\%(\%('.s:float_literal.'\|'.s:int_literal.'\|'.s:char_literal.'\|\i\+\|[;{}]\|'.s:operators2.'\)\@>\zs\s\@!\)\|\s\+\|\%('.s:char_literal.'\|'.s:string_literal.'\)\@>\zs'
 
@@ -669,8 +669,14 @@ function! GnuIndent(...)
     let ctokens = ['']
   endif
   let align_to_identifier_before_opening_token = [tokens[-1] =~ '^[{(<]$', -1]
-  if tokens[-1] == ','
-      \ || (tokens[-1] == ';' && tokens[0] == 'for')
+  if tokens[-1] == ';' && tokens[0] == 'for' &&
+      \ s:IndexOfMatchingToken(tokens, len(tokens)) == 1
+    " inside for
+    let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+    call s:Info("align to code inside for parenthesis")
+    return indent(plnum) +
+         \ strlen(matchstr(getline(plnum), '^\s*\zs.*\<for\s*(\s*'))
+  elseif tokens[-1] == ','
       \ || ctokens[0] =~ s:operators2_token
       \ || tokens[-1] =~ s:operators2_token
     let i = s:IndexOfMatchingToken(tokens, len(tokens))

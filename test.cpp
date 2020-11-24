@@ -233,6 +233,12 @@ public:
 	{
 	  foo();
 	}
+      for (int i = 0; i < f((400 < g()),
+			    blah);
+	   ++i)
+	{
+	  foo();
+	}
       f(
 	{0, 1,
 	 2, 3
