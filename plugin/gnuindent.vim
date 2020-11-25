@@ -158,7 +158,8 @@ let s:int_literal =
   \ .'\)\%([uU]ll\?\|[uU]LL\?\|ll\?[uU]\|LL\?[uU]\)\?'
 let s:fractional_constant = '\%('.s:digit_seq.'\?\.'.s:digit_seq.'\|'.s:digit_seq.'\.\)'
 let s:hex_fractional_constant = '\%('.s:hex_digit_seq.'\?\.'.s:hex_digit_seq.'\|'.s:hex_digit_seq.'\.\)'
-let s:identifier = '\%([a-zA-Z_]\i*\)'
+let s:identifier = '[a-zA-Z_]\i*'
+let s:identifier_token = '^[a-zA-Z_]\i*$'
 let s:decfloat_literal = '\%(\%('.s:fractional_constant.s:exponent_part.'\?\|'
   \ .s:digit_seq.s:exponent_part.'\)[fFlL]\?\)'
 let s:hexfloat_literal = '\%(0[xX]\%('.s:hex_fractional_constant.'\|'.s:hex_digit_seq.'\)'
@@ -505,6 +506,20 @@ function! s:RemoveControlTokens(tokens)
   return a:tokens
 endfunction
 
+function! s:RemoveMatchingAngleBrackets(tokens)
+  let t = a:tokens[:]
+  let i = index(t, '<')
+  while i > 0
+    let j = s:IndexOfMatchingToken(t, i)
+    if j == -1
+      return t
+    endif
+    let t = t[:i-1] + t[j+1:]
+    let i = index(t, '<')
+  endwhile
+  return t
+endfunction
+
 function! s:GetPrevSrcLineMatching(lnum, pattern)
   if type(a:pattern) == v:t_list
     let pattern = '\V'.join(a:pattern, '\.\*')
@@ -590,9 +605,16 @@ function! GnuIndent(...)
     let plnum = search('^\s*}', 'bnWz', 0, 20)
     return indent(plnum) - &sw
   elseif current =~ '^\s*::\@!'
-    if tokens[-3] =~ s:identifier && tokens[-2:] == ['(', ')']
-      call s:Info("no indent for ctor initializer list")
-      let plnum = s:GetPrevSrcLineMatching(lnum, tokens[-3:])
+    if tokens[-1] =~ '^[)>]>\?$'
+      let i = s:IndexOfMatchingToken(tokens, -1) - 1
+    else
+      let i = len(tokens) - 1
+    endif
+    if i >= 0 && tokens[i] =~ s:identifier_token &&
+        \ ((tokens[-1] == ')' && (i == 0 || tokens[i-1] =~ '^\%('.s:identifier.'\|>\|>>\)$')) ||
+        \  tokens[i-1] =~ '^\%(class\|struct\)$')
+      call s:Info("no indent for ctor initializer list or class base types")
+      let plnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
       return indent(plnum)
     elseif count(tokens[:-2], '?') > count(tokens, ':')
       let i = -2
@@ -619,7 +641,8 @@ function! GnuIndent(...)
     "else
       return max([cindent(lnum), indent(plnum) + &sw])
     "endif
-  elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*(' && tokens[-1] =~ s:identifier.'\|>>\|>\|&\|&&\|*'
+  elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*(' &&
+      \ tokens[-1] =~ s:identifier_token.'\|>>\|>\|&\|&&\|\*'
   "tokens[-1] !~ '[{<>!?:^&|;,~(*/%=+-][<>=]\?'
     call s:Info("function definition/declaration")
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
@@ -683,24 +706,32 @@ function! GnuIndent(...)
     let line = substitute(line, s:string_literal.'[^"]*$', '', '')
     let line = substitute(line, '\t', repeat('.', &ts), 'g')
     return strlen(line)
-  elseif tokens[-1] == ',' && tokens[-2] =~ '^[>)}]$' && index(tokens, ':') != -1
-    " constructor initializer list?
-    let i = s:IndexOfMatchingToken(tokens, -2) - 2
-    while i > 0
-      if tokens[i] =~ '^p\%(ublic\|rivate\|rotected\)$'
+  elseif tokens[-1] == ',' && tokens[-2] =~ '^\%(>>\|[>)}]\|'.s:identifier.'\)$' && index(tokens, ':') != -1
+    " constructor initializer list? or class inheritance list?
+    let t = s:RemoveMatchingAngleBrackets(tokens)
+    let i = len(t) - 1
+    while i > 1 && t[i] == ','
+      let i -= 1
+      if t[i] =~ '^[)}]$'
+        let i = s:IndexOfMatchingToken(t, i) - 1
+      endif
+      while i > 0 && t[i] =~ s:identifier_token && t[i-1] == '::'
+        let i -= 2
+      endwhile
+      if t[i] !~ s:identifier_token
+        let i = -1
+        break
+      elseif t[i-1] =~ '^p\%(ublic\|rivate\|rotected\)$'
+        let i -= 2
+      else
         let i -= 1
       endif
-      if tokens[i] == ',' && tokens[i-1] =~ '^[>)}]$'
-        let i = s:IndexOfMatchingToken(tokens, i-1) - 2
-      else
-        break
-      endif
     endwhile
-    if i > 0 && tokens[i] == ':'
+    if i > 0 && t[i] == ':'
       " yes
-      call s:Info("align to ctor initializer list")
-      let plnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
-      return s:IndentForAlignment(plnum, '^\s*\zs.*:\s*\ze'.tokens[i+1])
+      call s:Info("align to ctor initializer list / class inheritance list")
+      let plnum = s:GetPrevSrcLineMatching(lnum, t[i:])
+      return s:IndentForAlignment(plnum, '^\s*\zs.*:\s*\ze'.t[i+1])
     endif
   endif
   let ctokens = s:CxxTokenize(current)

@@ -446,13 +446,17 @@ public:
 
 template <typename... Ts>
   class tuple
+  : public inherited<0>,
+    blubb,
+    protected inherited2<1, 2>,
+    private base
   {
   public:
     template <typename A, typename B>
       constexpr
-      tuple(impl<A, B>&&)
-      : inherited(x, std::move
-		       (foo)),
+      tuple(impl<A, B>&&, int x = int([]() { return 1; }()))
+      : inherited<0>(x, std::move
+			  (foo)),
 	inherited2(std::move
 		     (foo)),
 	base(std::forward<A>
