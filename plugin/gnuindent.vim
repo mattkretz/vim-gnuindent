@@ -13,46 +13,59 @@ endfunction
 " Returns the index of the token matching tokens[start]. If start equals len(tokens)
 " then a matching preceding opening token is searched for.
 function! s:IndexOfMatchingToken(tokens, start)
-  "call s:Debug("IndexOfMatchingToken", a:tokens, a:start)
-  let depth = 1
   let n = len(a:tokens)
-  let i = a:start
-  if i < 0
-    let i += n
-  endif
-  let maybe_shift = 0
+  let depth_idx = {'<': 0, '>': 0, '>>': 0, '(': 1, ')': 1, '{': 2, '}': 2, '[': 3, ']': 3}
+  let depth = [0, 0, 0, 0, 0]
   let direction = 0
-  if i == n
+  if type(a:start) == v:t_string
+    let depth[depth_idx[a:start]] = 1 + (a:start == '>>')
+    let i = n - 1
     let direction = -1
-  elseif a:tokens[i] =~ '^[<{(\[]$'
-    let direction = 1
-  elseif a:tokens[i] =~ '^[>})\]]$'
-    let direction = -1
-  elseif a:tokens[i] == '>>'
-    let direction = -1
-    let depth = 2
+  else
+    let i = a:start
+    if i < 0
+      let i += n
+    endif
+    if i == n
+      let depth[4] = 1
+      let direction = -1
+    else
+      let depth[depth_idx[a:tokens[i]]] = 1 + (a:tokens[i] == '>>')
+      if a:tokens[i] =~ '^[<{(\[]$'
+        let direction = 1
+      elseif a:tokens[i] =~ '^[>})\]]$' || a:tokens[i] == '>>'
+        let direction = -1
+      endif
+    endif
   endif
+  let maybe_shift = []
+  "call s:Debug("IndexOfMatchingToken", a:tokens, a:start, depth, direction)
   if direction != 0
     let i += direction
     while i < n && i >= 0
-      if a:tokens[i] =~ '^[<{(\[]$'
-        if maybe_shift > 0
-          if a:tokens[i] == '<'
-            let depth -= 2 * maybe_shift * direction
+      if a:tokens[i] == '<'
+        while !empty(maybe_shift)
+          "call s:Debug("maybe_shift:", maybe_shift, "depth:", depth)
+          let was_closing = maybe_shift[-1] == depth
+          let maybe_shift = maybe_shift[:-2]
+          if was_closing
+            let depth[0] += 2
+            break
           endif
-          let maybe_shift = 0
-        endif
-        let depth += direction
+        endwhile
+        let depth[0] += direction
+      elseif a:tokens[i] =~ '^[{(\[]$'
+        let depth[depth_idx[a:tokens[i]]] += direction
       elseif a:tokens[i] =~ '^[>})\]]$'
-        let depth -= direction
+        let depth[depth_idx[a:tokens[i]]] -= direction
       elseif a:tokens[i] == '>>'
         if direction == -1
-          let maybe_shift += 1
-        elseif depth >= 2
-          let depth -= 2
+          let maybe_shift += [depth]
+        elseif depth[0] >= 2
+          let depth[depth_idx[a:tokens[i]]] -= 2
         endif
       endif
-      if depth == 0
+      if max(depth) + min(depth) == 0
         "call s:Debug("IndexOfMatchingToken", a:tokens, a:start, "returns", i)
         return i
       endif
@@ -533,9 +546,8 @@ function! GnuIndent(...)
   if empty(tokens)
     call s:Info("no preceding code")
     return 0
-  elseif tokens[0] == 'template' && tokens[-1] =~ '>>\?'
-      \ && count(tokens, '<') + 2 * count(tokens, '<<')
-      \ == count(tokens, '>') + 2 * count(tokens, '>>')
+  elseif tokens[0] == 'template' && tokens[-1] =~ '>>\?' &&
+      \ s:IndexOfMatchingToken(tokens, -1) == 1
     call s:Info("extra indent after template-head")
     let plnum = s:GetPrevSrcLineMatching(lnum, '\V\^\s\*'.join(tokens, '\.\*'))
     return indent(plnum) + &sw
@@ -561,7 +573,7 @@ function! GnuIndent(...)
     endif
     s:Debug("fall through from block indent section")
   elseif tokens[-1] =~ 'inline\|static\|constexpr\|explicit\|extern\|const'
-    call s:Info("align indent to previous line")
+    call s:Info("indent like previous line")
     let [plnum, previous] = s:GetPrevSrcLine(lnum)
     return indent(plnum)
   elseif tokens[-1] == '}' && tokens[s:IndexOfMatchingToken(tokens, -1) - 1] != ','
@@ -695,16 +707,23 @@ function! GnuIndent(...)
   if empty(ctokens)
     let ctokens = ['']
   endif
-  let align_to_identifier_before_opening_token = [tokens[-1] =~ '^[{(<]$', -1]
+  if ctokens[0] =~ '^\%(const\|noexcept\|override\|final\|&\|&&\)$' &&
+      \ tokens[-1] == ')'
+    let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+    call s:Info("indent keyword after function declaration/definition")
+    return indent(plnum) + &sw * (tokens[0] == 'template')
+  endif
+  let align_to_identifier_before_opening_token = [0, -1]
   if tokens[-1] == ';' && tokens[0] == 'for' &&
-      \ s:IndexOfMatchingToken(tokens, len(tokens)) == 1
+      \ s:IndexOfMatchingToken(tokens, ')') == 1
     " inside for
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     call s:Info("align to code inside for parenthesis")
     return s:IndentForAlignment(plnum, '^\s*\zs.*\<for\s*(\s*')
   elseif tokens[-1] == ','
-      \ || ctokens[0] =~ s:operators2_token
-      \ || tokens[-1] =~ s:operators2_token
+      \ || (ctokens[0] =~ s:operators2_token && ctokens[0] != '(')
+      \ || (tokens[-1] =~ s:operators2_token && (tokens[-1] !~ '^>>\?$' ||
+        \ s:IndexOfMatchingToken(tokens, -1) == -1))
     let i = s:IndexOfMatchingToken(tokens, len(tokens))
     if i == len(tokens) - 1
       let plnum = -1
@@ -778,6 +797,11 @@ function! GnuIndent(...)
       endif
     endif
   endif
+  if tokens[-1] =~ '^[{(<]$'
+    let align_to_identifier_before_opening_token = [1, -1]
+  elseif ctokens[0] == '('
+    let align_to_identifier_before_opening_token = [1, 0]
+  endif
   let base_indent = 0
   let base_indent_type = "none"
   let indent_offset = 0
@@ -785,7 +809,7 @@ function! GnuIndent(...)
   if align_to_identifier_before_opening_token[0]
     let j = len(tokens) + align_to_identifier_before_opening_token[1]
     let is_closing = ctokens[0] =~ '^[>)\]]>\?$' &&
-        \ s:IndexOfMatchingToken(tokens + ctokens[:0], len(tokens)) == j
+        \ s:IndexOfMatchingToken(tokens + ctokens[:0], ctokens[0]) == j
     let i = index(reverse(tokens[j+1:]), ',')
     if !is_closing && i > 0
       let i = len(tokens) - i
@@ -818,7 +842,12 @@ function! GnuIndent(...)
         endif
       endwhile
       let extra_indent = &sw
-      let base_indent_type = "1 shiftwidth behind identifier before opening ".tokens[j]
+      if align_to_identifier_before_opening_token[1] == 0
+        let base_indent_type = "1 shiftwidth behind preceding identifier"
+      else
+        let base_indent_type = "1 shiftwidth behind identifier before opening ".tokens[j]
+      endif
+      call s:Debug("set up", base_indent_type)
     endif
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
     let base_indent = s:IndentForAlignment(plnum, '^\s*\zs.*\ze'.join(tokens[i:i+1], '.*'))

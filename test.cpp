@@ -311,6 +311,25 @@ public:
 	   _M_foo{}
   {}
 
+  constexpr
+  simd()
+  noexcept(false)
+  const
+  : _M_data()
+  {
+  }
+
+  template <class U>
+    void
+    f(int x = int())
+    noexcept
+    const
+    &;
+
+  simd_mask<T, Abi>
+  operator==(simd a, simd b)
+  const;
+
   _GLIBCXX_SIMD_INTRINSIC friend constexpr
   _Base&
   __data(simd& __x)
@@ -424,6 +443,27 @@ public:
        );
     }
 };
+
+template <typename... Ts>
+  class tuple
+  {
+  public:
+    template <typename A, typename B>
+      constexpr
+      tuple(impl<A, B>&&)
+      : inherited(x, std::move
+		       (foo)),
+	inherited2(std::move
+		     (foo)),
+	base(std::forward<A>
+	       (blah)),
+	blubb(x, std::forward<B>
+		   (y))
+      {}
+  };
+
+f(x,
+  (1 + 2) * 3);
 
 template <class T>
   void f();
