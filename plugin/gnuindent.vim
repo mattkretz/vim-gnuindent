@@ -1,25 +1,29 @@
 nmap <F5> :source ~/.vim/pack/mattkretz/start/vim-gnuindent/plugin/gnuindent.vim<CR>:echo GetCxxContextTokens(line('.')-1, 20)<CR>
+command! SetupGnuIndent setlocal indentexpr=GnuIndent() indentkeys=:,0#,!^F,o,O,e,(,0),<>>,0<lt>
+ \0a,0b,0c,0d,0<e>,0f,0g,0h,0i,0j,0k,0l,0m,0n,0<o>,0p,0q,0r,0s,0t,0u,0v,0w,0x,0y,0z,
+ \0A,0B,0C,0D,0E,0F,0G,0H,0I,0J,0K,0L,0M,0N,0<O>,0P,0Q,0R,0S,0T,0U,0V,0W,0X,0Y,0Z,
+ \0~,0<!>,0%,0^,0&,0<*>,0-,0_,0+,0=,0{,0},0[,0],0;,0",0',0.,0?,0/,0<0>,01,02,03,04,05,06,07,08,09,0<:>,0<Bar>
 
-function! s:Info(...)
+function! s:Info(...) "{{{1
   echohl MoreMsg
   echom "GnuIndent:" join(a:000)
   echohl None
 endfunction
 
-function! s:Debug(...)
+function! s:Debug(...) "{{{1
   "echohl Debug | echom join(a:000) | echohl None
-endfunction
+endfunction "}}}1
 
 " Returns the index of the token matching tokens[start]. If start equals len(tokens)
 " then a matching preceding opening token is searched for.
-function! s:IndexOfMatchingToken(tokens, start)
+function! s:IndexOfMatchingToken(tokens, start) "{{{1
   let n = len(a:tokens)
   let depth_idx = {'<': 0, '>': 0, '>>': 0, '(': 1, ')': 1, '{': 2, '}': 2, '[': 3, ']': 3}
   let depth = [0, 0, 0, 0, 0]
   let direction = 0
   if type(a:start) == v:t_string
     let depth[depth_idx[a:start]] = 1 + (a:start == '>>')
-    let i = n - 1
+    let i = n
     let direction = -1
   else
     let i = a:start
@@ -53,7 +57,11 @@ function! s:IndexOfMatchingToken(tokens, start)
             break
           endif
         endwhile
-        let depth[0] += direction
+        if direction == -1 && depth[0] + depth[4] == 0
+          "it's a less-than operator
+        else
+          let depth[0] += direction
+        endif
       elseif a:tokens[i] =~ '^[{(\[]$'
         let depth[depth_idx[a:tokens[i]]] += direction
       elseif a:tokens[i] =~ '^[>})\]]$'
@@ -63,9 +71,11 @@ function! s:IndexOfMatchingToken(tokens, start)
           let maybe_shift += [depth]
         elseif depth[0] >= 2
           let depth[depth_idx[a:tokens[i]]] -= 2
+        elseif depth[1:3] == [0, 0, 0]
+          return i
         endif
       endif
-      if max(depth) + min(depth) == 0
+      if depth == [0, 0, 0, 0, 0] || (depth[4] == 1 && sort(depth[:3]) == [-1, 0, 0, 0])
         "call s:Debug("IndexOfMatchingToken", a:tokens, a:start, "returns", i)
         return i
       endif
@@ -76,7 +86,7 @@ function! s:IndexOfMatchingToken(tokens, start)
   return -1
 endfunction
 
-function! s:Index(tokens, pattern, ...)
+function! s:Index(tokens, pattern, ...) "{{{1
   let i = 0
   if a:0 == 1
     let i = a:1
@@ -92,7 +102,7 @@ function! s:Index(tokens, pattern, ...)
   endif
 endfunction
 
-function! s:GetSrcLine(n)
+function! s:GetSrcLine(n) "{{{1
   let i = a:n
   let s = getline(i)
   while getline(i-1)[-1:] == '\'
@@ -102,20 +112,30 @@ function! s:GetSrcLine(n)
   let s = substitute(s, '/\*.\{-}\*/', '', 'g')
   let s = substitute(s, '^.\{-}\ze\*/', '', '')
   return substitute(s, '\s*\(//.*\)\?$', '', '')
-endfunction
+endfunction "}}}1
 
 " lnum: line number where to align to
 " pattern: The match string determines the number of columns to indent
 "   additionally to the indent of the referenced line
-function! s:IndentForAlignment(lnum, pattern)
+function! s:IndentForAlignment(lnum, pattern, ...) "{{{1
   let s = getline(a:lnum)
   let s = substitute(s, '/\*\zs.\{-}\ze\*/', {m -> repeat(' ', strlen(m[0]))}, 'g')
   let s = substitute(s, '//\zs.*$', '', '')
   "call s:Debug("'".s."'")
-  return indent(a:lnum) + strlen(matchstr(s, a:pattern))
+  let p = a:pattern
+  if a:0 == 1
+    let i = 0
+    while len(a:1) > i && s =~ p.'\V'.join(a:1[:i], '\.\*')
+      let i += 1
+    endwhile
+    if i > 0
+      let p .= '\V'.join(a:1[:i-1], '\.\*')
+    endif
+  endif
+  return indent(a:lnum) + strlen(matchstr(s, p))
 endfunction
 
-function! s:GetPrevSrcLine(lnum)
+function! s:GetPrevSrcLine(lnum) "{{{1
   let plnum = a:lnum - 1
   let line = s:GetSrcLine(plnum)
   " ignore preprocessor directives and labels
@@ -137,11 +157,12 @@ function! s:GetPrevSrcLine(lnum)
     let line = s:GetSrcLine(plnum)
   endwhile
   return [plnum, line]
-endfunction
+endfunction "}}}1
 
 " Almost as defined in the C++ grammar...
 " Note that the unary +/- on int_literal and float_literal is not correct but hopefully
 " a good approximation
+" grammar patterns {{{1
 let     s:digit_seq = '\%(\d\%(''\?\d\)*\)'
 let s:hex_digit_seq = '\%(\x\%(''\?\x\)*\)'
 let s:exponent_part = '\%([eE][+-]\?'.s:digit_seq.'\)'
@@ -150,6 +171,8 @@ let s:bin_literal = '\%(0[bB][01]\%(''\?[01]\)*\)'
 let s:oct_literal = '\%(0\%(''\?[0-7]\)*\)'
 let s:dec_literal = '\%([1-9]\%(''\?\d\)*\)'
 let s:hex_literal = '\%(0[xX]'.s:hex_digit_seq.'\)'
+" FIXME: int_literal includes unary +/- even though that's wrong and leads to
+" indent errors. (`a\n+1` is different to `a\n+ 1`)
 let s:int_literal =
   \ '[+-]\?\%('.s:bin_literal
   \ .'\|'.s:oct_literal
@@ -169,9 +192,8 @@ let s:encoding_prefix_opt = '\%(u8\|[uUL]\)\?'
 let s:escape_sequence = '\\[''"?\\abfnrtv]\|\\\o\{1,3}\|\\x\x\x\?'
 let s:char_literal = s:encoding_prefix_opt.'''\%([^''\\]\|'.s:escape_sequence.'\)'''
 let s:string_literal = s:encoding_prefix_opt.'\%("\%([^"\\]\|\\[uU]\%(\x\{4}\)\{1,2}\|'.s:escape_sequence.'\)*"\|R"\([^(]*\)(.\{-})\1"\)'
-let s:operators1 = '++\|--\|&&\|||\|<=>\|[|&^!=<>*/%+-]=\|<<\|>>\|::\|\.\.\.\|[~,:?|&^!=<>*/%+-]'
-let s:operators2 = '->\*\?\|\.\*\?\|[()\[\]]\|'.s:operators1
-let cxx_tokenize = '\%(\%('.s:float_literal.'\|'.s:int_literal.'\|'.s:char_literal.'\|\i\+\|[;{}]\|'.s:operators2.'\)\@>\zs\s\@!\)\|\s\+\|\%('.s:char_literal.'\|'.s:string_literal.'\)\@>\zs'
+let s:operators2 = '->\*\?\|\.\.\.\|\.\*\?\|[()\[\]]\|'.'++\|--\|&&\|||\|<=>\|[|&^!=<>*/%+-]=\|<<\|>>\|::\|[~,:?|&^!=<>*/%+-]'
+let cxx_tokenize = '\%(\%(sizeof\.\.\.\|'.s:identifier.'\|'.s:float_literal.'\|'.s:int_literal.'\|'.s:char_literal.'\|[;{}]\|'.s:operators2.'\)\@>\zs\)\|\s\+\|\%('.s:char_literal.'\|'.s:string_literal.'\)\@>\zs'
 
 let s:assignment_operators = '\%(<<\|>>\|[/%^&|*+-]\)\?='
 let s:compare_operators = '<=>\|[<>!=]=\|[<>]'
@@ -185,29 +207,31 @@ let s:shift_op_token = '^\%(<<\|>>\)$'
 let s:arith_op_token = '^[/*%+-]$'
 let s:bit_op_token = '^[~&|^]$'
 let s:logic_op_token = '^\%(&&\|||\|!\)$'
-let s:operators1_token = '^\%('.s:operators1.'\)$'
 let s:operators2_token = '^\%('.s:operators2.'\)$'
 
-function! s:CxxTokenize(context)
+function! s:CxxTokenize(context) "{{{1
   return filter(split(a:context, g:cxx_tokenize), '!empty(v:val)')
 endfunction
 
-function! s:SimplifyContext(context, to_keep, ...)
+function! s:SimplifyContext(context, to_keep, ...) "{{{1
   let context = a:context
   if a:0 == 1
     let pattern = a:1
+    let pattern2 = '^'.pattern[1:]
   elseif a:0 == 2
     let matched_tok = a:1.'\s*'.a:2
     for tmp in [1, 2, 3, 4, 5, 6]
       let matched_tok = a:1.'\%(\s*\|'.matched_tok.'\)*'.a:2
     endfor
-    let pattern = '\%(^\|'.a:1.'\)'.
-                \ '\%([^'.a:to_keep.']\+\|'.matched_tok.'\)\+'.a:2
+    let pattern = '\%([^'.a:to_keep.']\+\|'.matched_tok.'\)\+'.a:2
+    let pattern2 = '^'.pattern
+    let pattern = a:1.pattern
   else
     throw "invalid arguments to SimplifyContext"
   endif
+  let context = substitute(context, pattern2, '', '')
   let m = matchstrpos(context, pattern)
-  call s:Debug("            next:", context, m)
+  "call s:Debug("            next:", context, m)
   while m[1] != -1
     if       count(m[0], '(') != count(m[0], ')')
         \ || count(m[0], '{') != count(m[0], '}')
@@ -215,23 +239,23 @@ function! s:SimplifyContext(context, to_keep, ...)
         \ || m[2] - m[1] < 2
         \ || m[0] =~ '^[ '.a:to_keep.']*$'
       let m = matchstrpos(context, pattern, m[2])
-      call s:Debug("   skipped. next:", context, m)
+      "call s:Debug("   skipped. next:", context, m)
     else
       let left = context[:m[1]][:-2]
       let right = context[m[2]:]
       let context = left.substitute(m[0], '[^'.a:to_keep.']\+', ' ', 'g').right
       let m = matchstrpos(context, pattern)
-      call s:Debug("simplified. next:", context, m)
+      "call s:Debug("simplified. next:", context, m)
     endif
   endwhile
   return context
 endfunction
 
-function! GetCxxContextTokens(from, n, ...)
+function! GetCxxContextTokens(from, n, ...) "{{{1
   let context = join(a:000)
   let nextline = a:from
   let n = 0
-  while nextline > 0 && (n < a:n || strlen(context) < a:n * &tw)
+  while nextline > 0 && (n < a:n || strlen(context) < a:n * &tw) "{{{2
     let s = getline(nextline)
     let nextline -= 1
     while getline(nextline)[-1:] == '\'
@@ -255,16 +279,16 @@ function! GetCxxContextTokens(from, n, ...)
       endif
       continue
     endif
-    " drop trailing whitespace and // comments
-    let s = substitute(s, '\s*\(//.*\)\?$', '', '')
+    " trim whitespace and drop // comments
+    let s = substitute(s, '^\s*\(.\{-}\)\s*\(//.*\)\?$', '\1', '')
     if empty(s)
       continue
     endif
     let n += 1
-    let context = s.substitute(context, '^\s*', ' ', '')
+    let context = s . ' ' . context
   endwhile
 
-  " get more context to see what the last closing brace belongs to
+  " get more context to see what the last closing brace belongs to {{{2
   if count(context, '{') < count(context, '}')
     let need_more = 1
     while nextline > 0 && need_more
@@ -278,8 +302,8 @@ function! GetCxxContextTokens(from, n, ...)
       if s =~ '^\s*#' || s =~ '^\s*\i\+\s*::\@!'
         continue
       endif
-      " drop trailing whitespace and // comments
-      let s = substitute(s, '\s*\(//.*\)\?$', '', '')
+      " trim whitespace and drop // comments
+      let s = substitute(s, '^\s*\(.\{-}\)\s*\(//.*\)\?$', '\1', '')
       if empty(s)
         if need_more > 1
           break
@@ -287,12 +311,12 @@ function! GetCxxContextTokens(from, n, ...)
           continue
         endif
       endif
-      let context = s.substitute(context, '^\s*', ' ', '')
+      let context = s . ' ' . context
       let need_more += (count(context, '{') >= count(context, '}'))
     endwhile
   endif
 
-  " go back beyond the start of an intializer list
+  " go back beyond the start of an intializer list {{{2
   while nextline > 0 && count(context, ';') == 0 && count(context, '{') <= count(context, '}')
     let s = getline(nextline)
     let nextline -= 1
@@ -304,26 +328,26 @@ function! GetCxxContextTokens(from, n, ...)
     if s =~ '^\s*#' || s =~ '^\s*\i\+\s*::\@!'
       continue
     endif
-    " drop trailing whitespace and // comments
-    let s = substitute(s, '\s*\(//.*\)\?$', '', '')
+    " trim whitespace and drop // comments
+    let s = substitute(s, '^\s*\(.\{-}\)\s*\(//.*\)\?$', '\1', '')
     if !empty(s)
-      let context = s.substitute(context, '^\s*', ' ', '')
+      let context = s . ' ' . context
     endif
   endwhile
 
-  " drop /* */ comments
+  " drop /* */ comments {{{2
   let context = substitute(context, '/\*.\{-}\*/', ' ', 'g')
   let context = substitute(context, '^.\{-}\ze\*/', '', '')
   if context =~ '/\*'
     return ['/*']
   endif
 
-  " remove char_literal and string_literal contents in case they contain any
-  " of: <>(){}[]
+  " remove char_literal and string_literal contents in case they contain {{{2
+  " any of: <>(){}[]
   let context = substitute(context, s:char_literal, "'c'", 'g')
   let context = substitute(context, s:string_literal, '"string_literal"', 'g')
 
-  " guard -> >= <= and << against <...> substitution.
+  " guard -> >= <= and << against <...> substitution. {{{2
   " This leaves operator> operator< and operator>> to disambiguate later
   let context = substitute(context, '->', '$`dr`', 'g')
   let context = substitute(context, '>=', '$`ge`', 'g')
@@ -331,7 +355,7 @@ function! GetCxxContextTokens(from, n, ...)
   let context = substitute(context, '<<', '$`sl`', 'g')
   let context = substitute(context, '>>=', '$`sra`', 'g')
 
-  " drop code in matching (), {}, [], and <>
+  " drop code in matching (), {}, [], and <> {{{2
   " in addition, the opening paren may instead be start-of-line
   " {}: replace everything inside with a space except {}
   " (): replace everything inside with a space except () and {}
@@ -346,23 +370,17 @@ function! GetCxxContextTokens(from, n, ...)
   for tmp in [1, 2, 3, 4, 5, 6]
     let matched_parens = '(\%(\s*\|'.matched_parens.'\|'.matched_braces.'\)*)'
   endfor
-  let pattern = '\%(^\|(\)'.
+  let pattern = '('.
               \ '\%([^{}()]\+'.
               \ '\|'.matched_parens.
               \ '\|'.matched_braces.
               \ '\)\+)'
   let context = s:SimplifyContext(context, '{}()', pattern)
   let context = s:SimplifyContext(context, '\[\]', '\[', '\]')
-  " let lookup = {'>': '$`gt`', '<': '$`lt`', '>>': '$`sr`'}
-  " let pattern = p[0][-2:].'[^'.p[1][-2:].']\{-}\zs\%(>>\|<||>\)\ze[^'.p[0][-2:].']*'.p[1][-2:]
-  " while context =~ pattern
-  "   let context = substitute(context, pattern,
-  "       \ {m -> lookup[m[0]]}, 'g')
-  "   call s:Debug(context)
-  " endwhile
   let context = substitute(context, '<\zs[^<>]\+\ze>', '', 'g')
   let context = s:SimplifyContext(context, '<>', '<', '>')
 
+  " get back the compare and shift operators {{{2
   let context = substitute(context, '$`lt`', '<', 'g')
   let context = substitute(context, '$`gt`', '>', 'g')
   let context = substitute(context, '$`sr`', '>>', 'g')
@@ -372,26 +390,27 @@ function! GetCxxContextTokens(from, n, ...)
   let context = substitute(context, '$`le`', '<=', 'g')
   let context = substitute(context, '$`sl`', '<<', 'g')
 
-  " simplify `if constexpr` to `if`
+  " simplify `if constexpr` to `if` {{{2
   let context = substitute(context, '\<if\s*constexpr\>', 'if', 'g')
 
-  " remove matching brackets, because they are a headache for GetPrevSrcLineMatching
+  " remove matching brackets, because they are a headache for GetPrevSrcLineMatching {{{2
   let pattern = '\[[^\[\]]*\]'
   while context =~ pattern
     let context = substitute(context, pattern, ' ', 'g')
     "call s:Debug(context)
   endwhile
 
-  " simplify conditional expressions `a?b:c` to `a c`
+  " simplify conditional expressions `a?b:c` to `a c` {{{2
   let context = substitute(context, '\s*?\%([^?:]\|::\)*::\@!\s*', ' ?: ', 'g')
 
-  " tokenize
+  " tokenize {{{2
   let tokens = s:CxxTokenize(context)
   if len(tokens) <= 1
     return tokens
   endif
+  "call s:Debug(tokens)
 
-  " keep only tokens after last block {...}, last ';', or last unmatched '{', but:
+  " keep only tokens after last block {...}, last ';', or last unmatched '{', but: {{{2
   " 1. don't make the list empty
   " 2. don't consider blocks inside parens (...)
   " 3. don't delete anything inside an open for(...;...;
@@ -435,6 +454,7 @@ function! GetCxxContextTokens(from, n, ...)
     let brace_count += 1
   endwhile
   call reverse(tokens)
+  "call s:Debug("remove irrelevant context", idx1, idx2, idx3)
   if idx1 > -1 && idx2 > -1
     if idx1 < idx2
       let tokens = tokens[len(tokens) - idx1:]
@@ -447,10 +467,10 @@ function! GetCxxContextTokens(from, n, ...)
   elseif idx1 > -1
     let tokens = tokens[len(tokens) - idx1:]
   endif
-  "call s:Debug tokens idx3
   if idx3 != 0
     let i = index(tokens, '{') + 1
     while i >= 1 && i <= len(tokens) + idx3
+      "call s:Debug(i, tokens[i], idx3, tokens[idx3])
       let depth = 1
       while depth > 0 && i <= len(tokens) + idx3
         let depth += (tokens[i] == '{') - (tokens[i] == '}')
@@ -462,9 +482,13 @@ function! GetCxxContextTokens(from, n, ...)
         if count(tokens[:i-1], '(') == count(tokens[:i-1], ')')
           let tokens = tokens[i:]
           let i = 0
+          "call s:Debug("shorten tokens to", tokens)
+        "else
+          "call s:Debug("unbalanced parenthesis", count(tokens[:i-1], '('), count(tokens[:i-1], ')'), i-1, tokens[:i-1])
         endif
         let i = index(tokens, '{', i) + 1
       else
+        "call s:Debug("breaking the loop")
         break
       endif
     endwhile
@@ -473,19 +497,20 @@ function! GetCxxContextTokens(from, n, ...)
     let tokens = tokens[1:]
     "call s:Debug tokens
   endwhile
-  " remove noise before a template head
+
+  " remove noise before a template head {{{2
   " (e.g. _GLIBCXX_BEGIN_NAMESPACE_VERSION)
   let template_idx = index(tokens, 'template')
   if template_idx > 0 && template_idx+1 < len(tokens) && tokens[template_idx+1] == '<'
     let tokens = tokens[template_idx:]
   endif
 
-  " clean up the char_literal and string_literal placeholders
+  " clean up the char_literal and string_literal placeholders {{{2
   call map(tokens, {i, v -> [v, v[0]][v == "'c'" || v == '"string_literal"']})
   return tokens
 endfunction
 
-function! s:RemoveControlTokens(tokens)
+function! s:RemoveControlTokens(tokens) "{{{1
   " remove leading if/else/for/while if there's more after it
   let paren_idx = -1
   if a:tokens[0] == 'else' && len(a:tokens) > 1
@@ -506,7 +531,7 @@ function! s:RemoveControlTokens(tokens)
   return a:tokens
 endfunction
 
-function! s:RemoveMatchingAngleBrackets(tokens)
+function! s:RemoveMatchingAngleBrackets(tokens) "{{{1
   let t = a:tokens[:]
   let i = index(t, '<')
   while i > 0
@@ -520,7 +545,7 @@ function! s:RemoveMatchingAngleBrackets(tokens)
   return t
 endfunction
 
-function! s:GetPrevSrcLineMatching(lnum, pattern)
+function! s:GetPrevSrcLineMatching(lnum, pattern) "{{{1
   if type(a:pattern) == v:t_list
     let pattern = '\V'.join(a:pattern, '\.\*')
   else
@@ -538,7 +563,24 @@ function! s:GetPrevSrcLineMatching(lnum, pattern)
   return lnum
 endfunction
 
-function! GnuIndent(...)
+function! s:TemplateIndent(tokens) "{{{1
+  let n = len(a:tokens)
+  let depth = 0
+  if n >= 3 && a:tokens[0] == 'template' && a:tokens[1] == '<'
+    let i = s:IndexOfMatchingToken(a:tokens, 1)
+    while i != -1
+      let depth += 1
+      if i+3 < n && a:tokens[i+1] == 'template'
+        let i = s:IndexOfMatchingToken(a:tokens, i+2)
+      else
+        break
+      endif
+    endwhile
+  endif
+  return &sw * depth
+endfunction
+
+function! GnuIndent(...) "{{{1
   if a:0 == 0
     let lnum = v:lnum
   elseif type(a:1) == v:t_string
@@ -548,6 +590,7 @@ function! GnuIndent(...)
   endif
   let current = s:GetSrcLine(lnum)
   let is_access_specifier = 0
+  "if current =~ '^\s*#' || current =~ '^\s*\i\+\s*::\@!' {{{2
   if current =~ '^\s*#' || current =~ '^\s*\i\+\s*::\@!'
     if current =~ '^\s*\%(public\|private\|protected\|signals\|slots\|Q_SIGNALS\|Q_SLOTS\)\s*:'
       let is_access_specifier = 1
@@ -556,17 +599,28 @@ function! GnuIndent(...)
       return 0
     endif
   endif
-  let tokens = GetCxxContextTokens(lnum-1, 20)
+  let tokens = GetCxxContextTokens(lnum-1, 20) "{{{2
   call s:Debug(tokens)
-  if empty(tokens)
+  if empty(tokens) "{{{2
     call s:Info("no preceding code")
     return 0
-  elseif tokens[0] == 'template' && tokens[-1] =~ '>>\?' &&
-      \ s:IndexOfMatchingToken(tokens, -1) == 1
-    call s:Info("extra indent after template-head")
-    let plnum = s:GetPrevSrcLineMatching(lnum, '\V\^\s\*'.join(tokens, '\.\*'))
-    return indent(plnum) + &sw
-  elseif current =~ '^\s*{'
+  endif
+  " extra indent for template heads (tokens[0] == 'template') {{{2
+  if tokens[0] == 'template' && tokens[-1] =~ '>>\?'
+    let i = s:IndexOfMatchingToken(tokens, -1)
+    let depth = 1
+    while i > 3 && tokens[i-1] == 'template'
+      let i = s:IndexOfMatchingToken(tokens, i-2)
+      let depth += 1
+    endwhile
+    if i == 1
+      call s:Info("extra indent after template-head")
+      let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+      return indent(plnum) + &sw * depth
+    endif
+  endif
+  "start of {} block (current =~ '^\s*{') {{{2
+  if current =~ '^\s*{'
     if tokens[-1] =~ '^\%(else\|do\)$'
         \ || (tokens[-2:] == ['(', ')'] && tokens[-3] =~ '^\%(if\|for\|while\)$')
         \ || (tokens[-1] !~ '^[;}]$'
@@ -584,38 +638,40 @@ function! GnuIndent(...)
     elseif tokens[-1] !~ '^[,(]$' " not a condblock
       call s:Info("align block indent to preceding statement")
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      return indent(plnum) + (tokens[0] == 'template') * &sw
+      return indent(plnum) + s:TemplateIndent(tokens)
     endif
     s:Debug("fall through from block indent section")
-  elseif tokens[-1] =~ 'inline\|static\|constexpr\|explicit\|extern\|const'
-    call s:Info("indent like previous line")
-    let [plnum, previous] = s:GetPrevSrcLine(lnum)
-    return indent(plnum)
+  "elseif tokens[-1] == '}' && tokens[s:IndexOfMatchingToken(tokens, -1) - 1] != ',' {{{2
   elseif tokens[-1] == '}' && tokens[s:IndexOfMatchingToken(tokens, -1) - 1] != ','
     let plnum = s:GetPrevSrcLineMatching(lnum, '\V\^\s\*'.join(tokens, '\.\*'))
     call s:Info("indent after block", plnum)
     return indent(plnum) + &sw * ((current =~ '^\s*->') - (current =~ '^\s*}') - is_access_specifier)
     "- &sw * (tokens[0] =~ 'template\|if\|else\|for\|while\|do')
-  elseif tokens == ['}']
+  elseif tokens == ['}'] "{{{2
     " not enough context from GetContextTokens => fall back to cindent
     call s:Info("use cindent because of distant context")
     return cindent('.')
+  "elseif tokens[-2:] == ['{', '}'] && tokens[-3] =~ 'if\|else\|for\|while\|do' {{{2
   elseif tokens[-2:] == ['{', '}'] && tokens[-3] =~ 'if\|else\|for\|while\|do'
     call s:Info("indent after condblock")
     let plnum = search('^\s*}', 'bnWz', 0, 20)
     return indent(plnum) - &sw
+  "elseif current =~ '^\s*::\@!' {{{2
   elseif current =~ '^\s*::\@!'
     if tokens[-1] =~ '^[)>]>\?$'
       let i = s:IndexOfMatchingToken(tokens, -1) - 1
     else
       let i = len(tokens) - 1
     endif
+    if tokens[i] == 'noexcept' && tokens[i-1] == ')'
+      let i = s:IndexOfMatchingToken(tokens, i-1) - 1
+    endif
     if i >= 0 && tokens[i] =~ s:identifier_token &&
-        \ ((tokens[-1] == ')' && (i == 0 || tokens[i-1] =~ '^\%('.s:identifier.'\|>\|>>\)$')) ||
+        \ ((tokens[-1] =~ '^\%(noexcept\|)\)$' && (i == 0 || tokens[i-1] =~ '^\%('.s:identifier.'\|[)>]\|>>\|::\)$')) ||
         \  tokens[i-1] =~ '^\%(class\|struct\)$')
       call s:Info("no indent for ctor initializer list or class base types")
-      let plnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
-      return indent(plnum)
+      let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+      return indent(plnum) + s:TemplateIndent(tokens)
     elseif count(tokens[:-2], '?') > count(tokens, ':')
       let i = -2
       while tokens[i] != '?' || tokens[i+1] == ':'
@@ -633,20 +689,14 @@ function! GnuIndent(...)
       call s:Info("align : to corresponding ?", plnum, i, j)
       return strlen(previous) - 1
     endif
-  elseif 0 && current =~ '^\s*[.<>!^&|;,~*/%?=+-];\@!' && tokens[-1] != ','
-    let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-    call s:Info("line starts with an operator: indent as continuation of previous line", plnum)
-    "if previous =~ '^\s*[.<>!^&|;,~*/%?:=+-]'
-      "return cindent(lnum)
-    "else
-      return max([cindent(lnum), indent(plnum) + &sw])
-    "endif
-  elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*(' &&
-      \ tokens[-1] =~ s:identifier_token.'\|>>\|>\|&\|&&\|\*'
-  "tokens[-1] !~ '[{<>!?:^&|;,~(*/%=+-][<>=]\?'
+    call s:Debug("fall through from : rule", tokens[i], tokens[-1], i, tokens[i-1])
+  "elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*(' {{{2
+  elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*('
+      \ && tokens[-1] =~ s:identifier_token.'\|>>\|>\|&\|&&\|\*'
     call s:Info("function definition/declaration")
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-    return indent(plnum) + &sw * (tokens[0] == 'template')
+    return indent(plnum) + s:TemplateIndent(tokens)
+  "elseif tokens[-1] == '{' {{{2
   elseif tokens[-1] == '{'
     if current =~ '^\s*}'
       call s:Info("indent closing brace of empty {} block")
@@ -666,7 +716,7 @@ function! GnuIndent(...)
       endif
       call s:Debug("fall through to align_to_identifier_before_opening_token")
     endif
-  elseif tokens[-1] == ';' && (tokens[0] != 'for' || s:IndexOfMatchingToken(tokens, 1) != -1)
+  elseif tokens[-1] == ';' && (tokens[0] != 'for' || s:IndexOfMatchingToken(tokens, 1) != -1) "{{{2
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     call s:Info("align to indent of last statement:", plnum)
     if current =~ '^\s*}'
@@ -674,6 +724,7 @@ function! GnuIndent(...)
     else
       return indent(plnum)
     endif
+  "elseif current =~ '^\s*}' {{{2
   elseif current =~ '^\s*}'
     " Not enough context in tokens: it only goes back to the first element in
     " the initializer list. Query the context of the first element and align
@@ -700,13 +751,14 @@ function! GnuIndent(...)
       call s:Info("align with opening brace of initializer list", pline)
       return strlen(pline) - 1
     endif
+  "elseif tokens[-1] == '"' && current =~ '^\s*"' {{{2
   elseif tokens[-1] == '"' && current =~ '^\s*"'
     call s:Info("align string literals")
     let [plnum, line] = s:GetPrevSrcLine(lnum)
     let line = substitute(line, s:string_literal.'[^"]*$', '', '')
     let line = substitute(line, '\t', repeat('.', &ts), 'g')
     return strlen(line)
-  elseif tokens[-1] == ',' && tokens[-2] =~ '^\%(>>\|[>)}]\|'.s:identifier.'\)$' && index(tokens, ':') != -1
+  elseif tokens[-1] == ',' && tokens[-2] =~ '^\%(>>\|[>)}]\|'.s:identifier.'\)$' && index(tokens, ':') != -1 "{{{2
     " constructor initializer list? or class inheritance list?
     let t = s:RemoveMatchingAngleBrackets(tokens)
     let i = len(t) - 1
@@ -731,55 +783,123 @@ function! GnuIndent(...)
       " yes
       call s:Info("align to ctor initializer list / class inheritance list")
       let plnum = s:GetPrevSrcLineMatching(lnum, t[i:])
-      return s:IndentForAlignment(plnum, '^\s*\zs.*:\s*\ze'.t[i+1])
+      return s:IndentForAlignment(plnum, '^\s*\zs.*:\s*\ze', t[i+1:])
+    endif
+  "elseif tokens[-1] =~ '^\%(inline\|static\|constexpr\|consteval\|explicit\|extern\|const\)$' {{{2
+  elseif tokens[-1] =~ '^\%(inline\|static\|constexpr\|consteval\|explicit\|extern\|const\)$'
+    call s:Info("indent like previous line")
+    let [plnum, previous] = s:GetPrevSrcLine(lnum)
+    return indent(plnum)
+  "elseif tokens[-1] =~ '^[_A-Z][_A-Z0-9]*$' {{{2
+  elseif tokens[-1] =~ '^[_A-Z][_A-Z0-9]*$'
+    " maybe those are macros before a return type of a function decl/defn
+    let i = len(tokens) - 2
+    while i >= 0 && tokens[i] =~ '^[_A-Z][_A-Z0-9]*$'
+      let i -= 1
+    endwhile
+    if i == -1 || tokens[i] =~ '^\%(inline\|static\|constexpr\|consteval\|explicit\|extern\|const\)$'
+      call s:Info("no indent assuming return type of function decl/defn")
+      return indent(s:GetPrevSrcLineMatching(lnum, tokens))
     endif
   endif
-  let ctokens = s:CxxTokenize(current)
+  let ctokens = s:CxxTokenize(current) "{{{2
   if empty(ctokens)
     let ctokens = ['']
   endif
-  if ctokens[0] =~ '^\%(const\|noexcept\|override\|final\|&\|&&\)$' &&
-      \ tokens[-1] == ')'
+  "if ctokens[0] =~ '^\%(const\|noexcept\|override\|final\|&\|&&\)$' {{{2
+  if ctokens[0] =~ '^\%(const\|noexcept\|override\|final\)$'
+      \ && tokens[-1] == ')'
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     call s:Info("indent keyword after function declaration/definition")
-    return indent(plnum) + &sw * (tokens[0] == 'template')
+    return indent(plnum) + s:TemplateIndent(tokens)
   endif
-  let align_to_identifier_before_opening_token = [0, -1]
-  if tokens[-1] == ';' && tokens[0] == 'for' &&
-      \ s:IndexOfMatchingToken(tokens, ')') == 1
+  let align_to_identifier_before_opening_token = [0, -1] "{{{2
+  " indent inside for parenthesis "{{{2
+  if tokens[-1] == ';' && tokens[0] == 'for'
+      \ && s:IndexOfMatchingToken(tokens, ')') == 1
     " inside for
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     call s:Info("align to code inside for parenthesis")
-    return s:IndentForAlignment(plnum, '^\s*\zs.*\<for\s*(\s*')
+    return s:IndentForAlignment(plnum, '^\s*\zs.*\<for\s*(\s*\ze', tokens[2:])
+  "elseif ctokens[0] =~ '^[>)}\]]>\?$' {{{2
+  elseif ctokens[0] =~ '^[>)}\]]>\?$'
+    let i = 0
+    while len(ctokens) > i+1 && ctokens[i][0] == ctokens[i+1]
+      let i += 1
+    endwhile
+    let i = s:IndexOfMatchingToken(tokens + ctokens[:i], len(tokens) + i)
+    if i != -1
+      let plnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
+      let pline = s:GetSrcLine(plnum)
+      let j = i
+      while j < len(tokens) && pline =~ '\V'.join(tokens[i:j], '\.\*')
+        let j += 1
+      endwhile
+      if i == j-1
+        let align_to_identifier_before_opening_token = [1, i-len(tokens)]
+        call s:Debug("set align_to_identifier_before_opening_token: ", align_to_identifier_before_opening_token)
+      else
+        call s:Info("align closing", ctokens[0], "to opening token", tokens[i], tokens[i:j-1], i, j)
+        return s:IndentForAlignment(plnum, '\V\^\s\*\zs\.\*\ze'.join(tokens[i:j-1], '\.\*'))
+      endif
+    endif
+  "elseif tokens[-1] =~ '^[{(<\[]$' {{{2
+  elseif tokens[-1] =~ '^[{(<\[]$'
+    let align_to_identifier_before_opening_token = [1, -1]
+  "elseif tokens[-1] == ',' {{{2
   elseif tokens[-1] == ','
       \ || (ctokens[0] =~ s:operators2_token && ctokens[0] != '(')
       \ || (tokens[-1] =~ s:operators2_token && (tokens[-1] !~ '^>>\?$' ||
         \ s:IndexOfMatchingToken(tokens, -1) == -1))
     let i = s:IndexOfMatchingToken(tokens, len(tokens))
-    if i == len(tokens) - 1
-      let plnum = -1
-    elseif i == -1
+    while i > 0 && tokens[i] == '<'
+      if tokens[i-1] !~ s:identifier_token
+        " tokens[i] is a less-than operator
+        let i = s:IndexOfMatchingToken(tokens[:i-1], i)
+      else
+        " try harder by looking for the matching closing token in ctokens
+        "let j = s:IndexOfMatchingToken(['<'] + ctokens, 0)
+        "if j != -1
+        "  tokens[i] is an opening angle bracket
+        "endif
+        " try harder by looking for the next opening/closing token in ctokens
+        let j = s:Index(ctokens, '^\%([(){}<>\[\]]\|>>\)$')
+        while j != -1 && ctokens[j] =~ '[({<\[]'
+          let j = s:IndexOfMatchingToken(ctokens, j)
+          if j == -1
+            break
+          elseif ctokens[j] == '>>' && s:IndexOfMatchingToken(ctokens, j) == -1
+            break
+          endif
+          let j = s:Index(ctokens, '^\%([(){}<>\[\]]\|>>\)$', j+1)
+        endwhile
+        if j != -1 && ctokens[j] =~ '^[)}\]]$'
+          " tokens[i] is a less-than operator
+          let i = s:IndexOfMatchingToken(tokens[:i-1], i)
+        else
+          " if j == -1: give up, we'll have to assume tokens[i] is an opening
+          " angle bracket
+          " else: ctokens[j] is > or >> and thus we assume tokens[i] is an
+          " opening angle bracket
+          break
+        endif
+      endif
+    endwhile
+    if i == -1
       if tokens[-1] == ','
         " this can happen in initializer lists, because everything up to the opening
         " brace is removed from the context tokens
         " plnum will be >=0 if it's an initializer list
         let tok1 = ['{']
         let tok2 = tokens
-        let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-        let [plnum, context] = s:GetPrevSrcLine(plnum)
-        " I had
-        "if context =~ '[};]$'
-        "  let plnum = -1
-        "else
-        "  ...
-        "endif
-        " here, but I don't remember what that was supposed to fix.
-        " Seems like an incorrect workaround
         let plnum = s:GetPrevSrcLineMatching(lnum, '\V{\s\*'.join(tokens, '\.\*'))
         call s:Debug("is this an initializer list?", plnum)
       else
         let plnum = -1
       endif
+    elseif tokens[-1] != ',' && s:Index(tokens, s:assignment_op_token, i+1) != -1
+      " we want alignment after assignment op
+      let plnum = -1
     else
       let tok1 = tokens[:i]
       let tok2 = tokens[i+1:]
@@ -828,19 +948,18 @@ function! GnuIndent(...)
       endif
     endif
   endif
-  if tokens[-1] =~ '^[{(<]$'
-    let align_to_identifier_before_opening_token = [1, -1]
-  elseif ctokens[0] == '('
+  "if tokens[-1] =~ '^[{(<]$' {{{2
+  if ctokens[0] == '('
     let align_to_identifier_before_opening_token = [1, 0]
   endif
   let base_indent = 0
   let base_indent_type = "none"
   let indent_offset = 0
   let tokens = s:RemoveControlTokens(tokens)
-  if align_to_identifier_before_opening_token[0]
+  if align_to_identifier_before_opening_token[0] "{{{2
     let j = len(tokens) + align_to_identifier_before_opening_token[1]
     let is_closing = ctokens[0] =~ '^[>)\]]>\?$' &&
-        \ s:IndexOfMatchingToken(tokens + ctokens[:0], ctokens[0]) == j
+        \ s:IndexOfMatchingToken(tokens, ctokens[0]) == j
     let i = index(reverse(tokens[j+1:]), ',')
     if !is_closing && i > 0
       let i = len(tokens) - i
@@ -881,37 +1000,45 @@ function! GnuIndent(...)
       call s:Debug("set up", base_indent_type)
     endif
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
-    let base_indent = s:IndentForAlignment(plnum, '^\s*\zs.*\ze'.join(tokens[i:i+1], '.*'))
+    let base_indent = s:IndentForAlignment(plnum, '^\s*\zs.*\ze', tokens[i:])
     if is_closing
       call s:Info("align with identifier before opening", tokens[j], base_indent, plnum, i, tokens[i:])
       return base_indent
     endif
     let base_indent += extra_indent
-  elseif tokens == ['/*']
+  elseif tokens == ['/*'] "{{{2
     return cindent(lnum)
-  else
+  else "{{{2
     let i = s:Index(tokens, s:indent_op_token)
-    while i != -1 && tokens[i] =~ '^[({\[<]$'
-      let j = s:IndexOfMatchingToken(tokens, i)
-      if j == -1
+    while i != -1
+      if tokens[i] =~ '^[({\[<]$'
+        let j = s:IndexOfMatchingToken(tokens, i)
+        if j == -1
+          if tokens[i] == '<' && tokens[i-1] == 'template'
+            let i = s:Index(tokens, s:indent_op_token, i + 1)
+            continue
+          endif
+          break
+        endif
+        "s:Debug("restart search at", j+1, tokens[j+1], "found", i)
+        let i = s:Index(tokens, s:indent_op_token, j + 1)
+      else
         break
       endif
-      let i = s:Index(tokens, s:indent_op_token, j + 1)
-      "s:Debug("restart search at", j+1, tokens[j+1], "found", i)
     endwhile
     if i > 0 && i < len(tokens) - 1 && tokens[i] =~ s:assignment_op_token
       let oplnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
-      let base_indent = s:IndentForAlignment(oplnum, '^\s*\zs.\{-}'.tokens[i].'\s*')
+      let base_indent = s:IndentForAlignment(oplnum, '^\s*\zs.*'.tokens[i].'\s*\ze', tokens[i+1:])
       let base_indent_type = "align to assignment operator"
-    elseif i > 0 && i < len(tokens) - 1
-      let oplnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
-      let base_indent = s:IndentForAlignment(oplnum, '^\s*\zs.\{-}\ze'.tokens[i])
-      call s:Info("align with operator on preceding line", i, tokens[i])
-      return base_indent
     elseif tokens[0] == 'return'
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
       let base_indent = indent(plnum) + max([&sw, strlen(matchstr(s:GetSrcLine(plnum), 'return\s\+'))])
       let base_indent_type = "align with return"
+    elseif i > 0 && i < len(tokens) - 1
+      let oplnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
+      let base_indent = s:IndentForAlignment(oplnum, '^\s*\zs.*\ze', tokens[i:])
+      call s:Info("align with operator on preceding line", i, tokens[i])
+      return base_indent
     elseif tokens[0] =~ '^\%(if\|else\|for\|while\)$'
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
       let base_indent = indent(plnum) + &sw
@@ -919,7 +1046,7 @@ function! GnuIndent(...)
     elseif tokens[0] == 'template'
       " if not aligned, add 1 shiftwidth for templates
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      let base_indent = indent(plnum) + &sw
+      let base_indent = indent(plnum) + s:TemplateIndent(tokens)
       let base_indent_type = "1 shiftwidth behind template"
       " add 1 shiftwidth per open scope
       " (this shouldn't happen: either align to opening scope or the preceding identifier)
@@ -934,7 +1061,7 @@ function! GnuIndent(...)
       let indent_offset = &sw
     endif
   endif
-  if indent_offset == 0
+  if indent_offset == 0 "{{{2
     let indent_offset = &sw * ((
         \   ctokens[0] =~ s:operators2_token &&
         \   ctokens[0] !~ '^[\[({})\]]$'
@@ -943,6 +1070,8 @@ function! GnuIndent(...)
         \   tokens[-1] !~ '^\%(>>\|[\[\]()<>,]\)$'
         \ ))
   endif
-  call s:Info(base_indent_type, base_indent, indent_offset)
+  call s:Info(base_indent_type, base_indent, indent_offset, ctokens, align_to_identifier_before_opening_token)
   return base_indent + indent_offset
-endfunction
+endfunction "}}}1
+
+" vim: foldmethod=marker foldmarker={{{,}}} sw=2 et

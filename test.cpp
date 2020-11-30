@@ -3,10 +3,47 @@ template <class T = void_t<foo, foo>[i >> 1
 	  class U = T::template foo<bar, x>>
   void f(int x);
 
+template <class T1, class T2>
+  template <class U>
+    constexpr
+    inline
+    void
+    pair<T1, T2>::
+      pair()
+    : pair()
+    {
+      g();
+    }
+
+template <bool _Valid = (x == 1)
+			  && foo>
+  void
+  f();
+
+int x = foo<bar<baz
+		  + 2
+	   >>;
+int x = foo<bar<x,
+		baz + 2>>;
+int x = foo<x,
+	    bar<baz + 2>>;
+
+static_assert(1 < 2,
+	      "huh?");
+static_assert(x < 2,
+	      "huh?");
+static_assert(x < 2,
+	      foo<1>());
+// The following is just not worth the effort. '<' is ambiguous and it's
+// unreasonable to disambiguate.
+static_assert(x < 2,
+		  "it's"
+		  "complicated");
+
 void
 f();
 
-type
+int
   var;
 
 ttype<T>
@@ -14,6 +51,21 @@ ttype<T>
 
 ttype<bar<T>>
   var;
+
+_GLIBCXX_CONSTEXPR
+void
+f()
+{
+  N = N
+	+ 1;
+  n = n
+	+ 1;
+}
+
+template <class T>
+  _GLIBCXX_CONSTEXPR
+  void
+  f();
 
 foo({1, 2, 3,
      4, 5, 6});
@@ -130,7 +182,7 @@ using all_udt_simd
 #else
 							     fixed_size_abi_list
 #endif
-							    >>>;
+			 >>>;
 
 template <typename _Tp>
   concept __tuple_of_simd_like = requires(_Tp __a)
@@ -224,6 +276,11 @@ public:
 		: e
 	    : foo ? g
 		  : h + 1;
+      bool x = sizeof...(Elements) == 1
+		 && !is_same<foo, bar>;
+      if (x)
+	return sizeof...(Elements) == 1
+		 && !is_same<foo, bar>;
       a = f(xasdf
 	      ? foo
 	      : bar);
@@ -314,7 +371,6 @@ public:
   constexpr
   simd()
   noexcept(false)
-  const
   : _M_data()
   {
   }
@@ -464,6 +520,14 @@ template <typename... Ts>
 	blubb(x, std::forward<B>
 		   (y))
       {}
+
+    tuple() noexcept
+    : inherited(x)
+    {}
+
+    tuple() noexcept(noexcept(foo<1>()))
+    : inherited(x)
+    {}
   };
 
 f(x,
