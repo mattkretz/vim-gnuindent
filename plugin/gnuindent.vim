@@ -700,11 +700,12 @@ function! GnuIndent(...) "{{{1
   elseif tokens[-1] == '{'
     if current =~ '^\s*}'
       call s:Info("indent closing brace of empty {} block")
-      let [plnum, previous] = s:GetPrevSrcLine(lnum)
+      let plnum = s:GetPrevSrcLineMatching(lnum, tokens[-1:])
       return indent(plnum)
     else
       " first indent inside a new {} block (ignoring labels)
-      let [plnum, previous] = s:GetPrevSrcLine(lnum)
+      let plnum = s:GetPrevSrcLineMatching(lnum, tokens[-1:])
+      let previous = s:GetSrcLine(plnum)
       let ptok = s:CxxTokenize(previous)
       if previous =~ '^\s*{' || (
           \ count(ptok, '(') == count(ptok, ')') &&

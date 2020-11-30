@@ -551,5 +551,19 @@ template <>
     return;
 #endif
   }
+namespace details
+{
+  /*
+   * A comment
+   */
+  int x;
+  namespace blah
+  {
+    /*
+     * sdf
+     */
+  }
+  int y;
+}
 
 // vim: indentexpr=GnuIndent() noet sw=2 ts=8 tw=80 cc=81
