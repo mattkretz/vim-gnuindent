@@ -577,7 +577,7 @@ function! s:TemplateIndent(tokens) "{{{1
       endif
     endwhile
   endif
-  return &sw * depth
+  return shiftwidth() * depth
 endfunction
 
 function! GnuIndent(...) "{{{1
@@ -616,7 +616,7 @@ function! GnuIndent(...) "{{{1
     if i == 1
       call s:Info("extra indent after template-head")
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      return indent(plnum) + &sw * depth
+      return indent(plnum) + shiftwidth() * depth
     endif
   endif
   "start of {} block (current =~ '^\s*{') {{{2
@@ -630,11 +630,11 @@ function! GnuIndent(...) "{{{1
                  \ && count(tokens[2:], '(') == count(tokens[2:], ')'))))
       call s:Info("extra indent for condblock")
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      return indent(plnum) + &sw
+      return indent(plnum) + shiftwidth()
     elseif tokens[-1] == '{'
       call s:Info("indent block in a block")
       let [plnum, prev] = s:GetPrevSrcLine(lnum)
-      return indent(plnum) + &sw
+      return indent(plnum) + shiftwidth()
     elseif tokens[-1] !~ '^[,(]$' " not a condblock
       call s:Info("align block indent to preceding statement")
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
@@ -645,8 +645,8 @@ function! GnuIndent(...) "{{{1
   elseif tokens[-1] == '}' && tokens[s:IndexOfMatchingToken(tokens, -1) - 1] != ','
     let plnum = s:GetPrevSrcLineMatching(lnum, '\V\^\s\*'.join(tokens, '\.\*'))
     call s:Info("indent after block", plnum)
-    return indent(plnum) + &sw * ((current =~ '^\s*->') - (current =~ '^\s*}') - is_access_specifier)
-    "- &sw * (tokens[0] =~ 'template\|if\|else\|for\|while\|do')
+    return indent(plnum) + shiftwidth() * ((current =~ '^\s*->') - (current =~ '^\s*}') - is_access_specifier)
+    "- shiftwidth() * (tokens[0] =~ 'template\|if\|else\|for\|while\|do')
   elseif tokens == ['}'] "{{{2
     " not enough context from GetContextTokens => fall back to cindent
     call s:Info("use cindent because of distant context")
@@ -655,7 +655,7 @@ function! GnuIndent(...) "{{{1
   elseif tokens[-2:] == ['{', '}'] && tokens[-3] =~ 'if\|else\|for\|while\|do'
     call s:Info("indent after condblock")
     let plnum = search('^\s*}', 'bnWz', 0, 20)
-    return indent(plnum) - &sw
+    return indent(plnum) - shiftwidth()
   "elseif current =~ '^\s*::\@!' {{{2
   elseif current =~ '^\s*::\@!'
     if tokens[-1] =~ '^[)>]>\?$'
@@ -712,7 +712,7 @@ function! GnuIndent(...) "{{{1
           \ count(ptok, '<') == count(ptok, '>'))
           "\ count(ptok, '{') - 1 == count(ptok, '}') &&
         call s:Info("indent inside a new {} block:")
-        return indent(plnum) + &sw * (1 - is_access_specifier)
+        return indent(plnum) + shiftwidth() * (1 - is_access_specifier)
       endif
       call s:Debug("fall through to align_to_identifier_before_opening_token")
     endif
@@ -720,7 +720,7 @@ function! GnuIndent(...) "{{{1
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     call s:Info("align to indent of last statement:", plnum)
     if current =~ '^\s*}'
-      return indent(plnum) - &sw
+      return indent(plnum) - shiftwidth()
     else
       return indent(plnum)
     endif
@@ -937,14 +937,14 @@ function! GnuIndent(...) "{{{1
         if ctokens[0] =~ '^[})>\]]'
           let extra_indent = -1
         elseif tokens[-1] != ','
-          let extra_indent += &sw * (ctokens[0] =~ s:operators2_token)
+          let extra_indent += shiftwidth() * (ctokens[0] =~ s:operators2_token)
         endif
         call s:Info('align to opening '.tok1[-1].': '''.previous."'", plnum, tok2, ctokens[0])
         return strlen(previous) + extra_indent
       elseif tok1[-1] == '{'
         let plnum = s:GetPrevSrcLineMatching(lnum, tok2)
         call s:Info('align in initializer list', plnum, tok2)
-        return indent(plnum) - &sw * (ctokens[0] == '}')
+        return indent(plnum) - shiftwidth() * (ctokens[0] == '}')
       endif
     endif
   endif
@@ -991,7 +991,7 @@ function! GnuIndent(...) "{{{1
           break
         endif
       endwhile
-      let extra_indent = &sw
+      let extra_indent = shiftwidth()
       if align_to_identifier_before_opening_token[1] == 0
         let base_indent_type = "1 shiftwidth behind preceding identifier"
       else
@@ -1032,7 +1032,7 @@ function! GnuIndent(...) "{{{1
       let base_indent_type = "align to assignment operator"
     elseif tokens[0] == 'return'
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      let base_indent = indent(plnum) + max([&sw, strlen(matchstr(s:GetSrcLine(plnum), 'return\s\+'))])
+      let base_indent = indent(plnum) + max([shiftwidth(), strlen(matchstr(s:GetSrcLine(plnum), 'return\s\+'))])
       let base_indent_type = "align with return"
     elseif i > 0 && i < len(tokens) - 1
       let oplnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
@@ -1041,7 +1041,7 @@ function! GnuIndent(...) "{{{1
       return base_indent
     elseif tokens[0] =~ '^\%(if\|else\|for\|while\)$'
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      let base_indent = indent(plnum) + &sw
+      let base_indent = indent(plnum) + shiftwidth()
       let base_indent_type = "1 shiftwidth behind unscoped if/else/for/while"
     elseif tokens[0] == 'template'
       " if not aligned, add 1 shiftwidth for templates
@@ -1050,7 +1050,7 @@ function! GnuIndent(...) "{{{1
       let base_indent_type = "1 shiftwidth behind template"
       " add 1 shiftwidth per open scope
       " (this shouldn't happen: either align to opening scope or the preceding identifier)
-      "let indent_offset += &sw * (
+      "let indent_offset += shiftwidth() * (
       "  \   count(tokens, '\[') + count(tokens, '(') + count(tokens, '<')
       "  \ - count(tokens, '\]') - count(tokens, ')') - count(tokens, '>')
       "  \ - 2*count(tokens, '>>'))
@@ -1058,11 +1058,11 @@ function! GnuIndent(...) "{{{1
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
       let base_indent = indent(plnum)
       let base_indent_type = "same base indent as first line of statement"
-      let indent_offset = &sw
+      let indent_offset = shiftwidth()
     endif
   endif
   if indent_offset == 0 "{{{2
-    let indent_offset = &sw * ((
+    let indent_offset = shiftwidth() * ((
         \   ctokens[0] =~ s:operators2_token &&
         \   ctokens[0] !~ '^[\[({})\]]$'
         \ ) || (
