@@ -719,7 +719,7 @@ function! GnuIndent(...) "{{{1
   elseif tokens[-1] == ';' && (tokens[0] != 'for' || s:IndexOfMatchingToken(tokens, 1) != -1) "{{{2
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     call s:Info("align to indent of last statement:", plnum)
-    if current =~ '^\s*}'
+    if current =~ '^\s*}' || is_access_specifier
       return indent(plnum) - shiftwidth()
     else
       return indent(plnum)

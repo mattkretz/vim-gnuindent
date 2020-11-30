@@ -340,6 +340,9 @@ label:
 				     << y;
     }
 
+private:
+  int _M_data;
+
 public:
   template <typename _Flags>
     _GLIBCXX_SIMD_ALWAYS_INLINE
