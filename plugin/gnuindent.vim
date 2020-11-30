@@ -596,7 +596,7 @@ function! GnuIndent(...) "{{{1
       let is_access_specifier = 1
     else
       call s:Info("preprocessor or label")
-      return 0
+      return cindent(lnum)
     endif
   endif
   let tokens = GetCxxContextTokens(lnum-1, 20) "{{{2

@@ -15,6 +15,10 @@ option).
     cd ~/.vim/pack/mattkretz/start
     git clone https://github.com/mattkretz/vim-gnuindent
 
+## Known Issues / TODO
+
+* Indentation of multi-line #defines simply falls back to cindent.
+
 ## License
 
 Copyright © Matthias Kretz.  Distributed under the same terms as Vim itself.
