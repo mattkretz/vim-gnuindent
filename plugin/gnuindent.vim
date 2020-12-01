@@ -109,7 +109,7 @@ function! s:GetSrcLine(n) "{{{1
     let i -= 1
     let s = getline(i)[:-2] . s
   endwhile
-  let s = substitute(s, '/\*.\{-}\*/', '', 'g')
+  let s = substitute(s, '/\*.\{-}\*/\s*', ' ', 'g')
   let s = substitute(s, '^.\{-}\ze\*/', '', '')
   return substitute(s, '\s*\(//.*\)\?$', '', '')
 endfunction "}}}1
@@ -139,7 +139,7 @@ function! s:GetPrevSrcLine(lnum) "{{{1
   let plnum = a:lnum - 1
   let line = s:GetSrcLine(plnum)
   " ignore preprocessor directives and labels
-  while (empty(line) || line =~ '^\s*#' || line =~ '^\s*\i\+\s*::\@!') && plnum > 1
+  while (empty(line) || line == '*/' || line =~ '^\s*#' || line =~ '^\s*\i\+\s*::\@!') && plnum > 1
     if line =~ '^\s*#\s*el\%(se\|if\)\>'
       " walk up beyond the #if that started it
       let depth = 1
@@ -151,6 +151,10 @@ function! s:GetPrevSrcLine(lnum) "{{{1
         elseif line =~ '^\s*#\s*endif\>'
           let depth += 1
         endif
+      endwhile
+    elseif substitute(getline(plnum), '/\*.\{-}\*/', '', 'g') =~ '^.*\*/'
+      while plnum > 0 && getline(plnum - 1) !~ '/\*'
+        let plnum -= 1
       endwhile
     endif
     let plnum -= 1
@@ -632,8 +636,8 @@ function! GnuIndent(...) "{{{1
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
       return indent(plnum) + shiftwidth()
     elseif tokens[-1] == '{'
-      call s:Info("indent block in a block")
-      let [plnum, prev] = s:GetPrevSrcLine(lnum)
+      let plnum = s:GetPrevSrcLineMatching(lnum, ['{'])
+      call s:Info("indent block in a block", plnum)
       return indent(plnum) + shiftwidth()
     elseif tokens[-1] !~ '^[,(]$' " not a condblock
       call s:Info("align block indent to preceding statement")

@@ -560,10 +560,13 @@ namespace details
   namespace blah
   {
     /*
-     * sdf
+     * {sdf}
      */
+    {
+      int y;
+    }
   }
-  int y;
+  int z;
 }
 
 #define foo(x) \
