@@ -634,19 +634,38 @@ function! GnuIndent(...) "{{{1
       return indent(plnum) + shiftwidth() * depth
     endif
   endif
+  " if-else / loops {{{2
+  if tokens[0] =~ '^\%(if\|else\|do\|for\|while\)$' &&
+      \ tokens[-1] =~ '^\%(else\|do\|)\)$'
+    let depth = 0
+    let i = 0
+    while i < len(tokens) && tokens[i] =~ '^\%(if\|for\|while\|else\|do\)$'
+      if tokens[i] == 'else' || tokens[i] == 'do'
+        if i+1 == len(tokens) || tokens[i+1] != 'if'
+          let depth += 1
+        endif
+        let i += 1
+      elseif tokens[i+1] == '('
+        let i = s:IndexOfMatchingToken(tokens, i + 1)
+        if i != -1
+          let depth += 1
+          let i += 1
+          call s:Debug("condblock depth:", depth, i)
+        endif
+      else
+        call s:Debug("parse error in if/for/while")
+        break
+      endif
+    endwhile
+    let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+    if depth > 0
+      call s:Info("extra indent for condblock", depth)
+      return indent(plnum) + shiftwidth() * depth
+    endif
+  endif
   "start of {} block (current =~ '^\s*{') {{{2
   if current =~ '^\s*{'
-    if tokens[-1] =~ '^\%(else\|do\)$'
-        \ || (tokens[-2:] == ['(', ')'] && tokens[-3] =~ '^\%(if\|for\|while\)$')
-        \ || (tokens[-1] !~ '^[;}]$'
-            \ && ((tokens[0] =~ '^\%(if\|for\|while\)$'
-                 \ && count(tokens[1:], '(') == count(tokens[1:], ')'))
-             \ || (tokens[0] == 'else' && tokens[1] == 'if'
-                 \ && count(tokens[2:], '(') == count(tokens[2:], ')'))))
-      call s:Info("extra indent for condblock")
-      let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      return indent(plnum) + shiftwidth()
-    elseif tokens[-1] == '{'
+    if tokens[-1] == '{'
       let plnum = s:GetPrevSrcLineMatching(lnum, ['{'])
       call s:Info("indent block in a block", plnum)
       return indent(plnum) + shiftwidth()
@@ -705,9 +724,10 @@ function! GnuIndent(...) "{{{1
       return strlen(previous) - 1
     endif
     call s:Debug("fall through from : rule", tokens[i], tokens[-1], i, tokens[i-1])
-  "elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*(' {{{2
+  "elseif function defn/decl {{{2
   elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*('
       \ && tokens[-1] =~ s:identifier_token.'\|>>\|>\|&\|&&\|\*'
+      \ && tokens[-1] !~ '^\%(else\|do\)$'
     call s:Info("function definition/declaration")
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     return indent(plnum) + s:TemplateIndent(tokens)
@@ -1055,10 +1075,6 @@ function! GnuIndent(...) "{{{1
       let base_indent = s:IndentForAlignment(oplnum, '^\s*\zs.*\ze', tokens[i:])
       call s:Info("align with operator on preceding line", i, tokens[i])
       return base_indent
-    elseif tokens[0] =~ '^\%(if\|else\|for\|while\)$'
-      let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      let base_indent = indent(plnum) + shiftwidth()
-      let base_indent_type = "1 shiftwidth behind unscoped if/else/for/while"
     elseif tokens[0] == 'template'
       " if not aligned, add 1 shiftwidth for templates
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
