@@ -854,7 +854,7 @@ function! GnuIndent(...) "{{{1
   "elseif tokens[-1] == ',' {{{2
   elseif tokens[-1] == ','
       \ || (ctokens[0] =~ s:operators2_token && ctokens[0] != '(')
-      \ || (tokens[-1] =~ s:operators2_token && (tokens[-1] !~ '^>>\?$' ||
+      \ || (tokens[-1] =~ s:operators2_token && (tokens[-1] !~ '^[)>]>\?$' ||
         \ s:IndexOfMatchingToken(tokens, -1) == -1))
     let i = s:IndexOfMatchingToken(tokens, len(tokens))
     while i > 0 && tokens[i] == '<'

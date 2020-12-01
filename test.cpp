@@ -18,7 +18,11 @@ template <class T1, class T2>
 template <bool _Valid = (x == 1)
 			  && foo>
   void
-  f();
+  f()
+  {
+    return g<_Res>(_M_f, _Mu<_Bound_args>()
+			   (std::get<_Indexes>(_M_bound_args), __args)...);
+  }
 
 int x = foo<bar<baz
 		  + 2
