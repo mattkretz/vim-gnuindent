@@ -458,7 +458,7 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
     let brace_count += 1
   endwhile
   call reverse(tokens)
-  "call s:Debug("remove irrelevant context", idx1, idx2, idx3)
+  "call s:Debug("remove irrelevant context", idx1, idx2, idx3, tokens)
   if idx1 > -1 && idx2 > -1
     if idx1 < idx2
       let tokens = tokens[len(tokens) - idx1:]
@@ -472,8 +472,22 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
     let tokens = tokens[len(tokens) - idx1:]
   endif
   if idx3 != 0
-    let i = index(tokens, '{') + 1
-    while i >= 1 && i <= len(tokens) + idx3
+    "call s:Debug("remove unrelated blocks", tokens)
+    let i = 0
+    while 1
+      let open_idx = index(tokens, '{', i)
+      while open_idx > 2 && tokens[open_idx-1] =~ s:identifier_token && tokens[open_idx-2] =~ '^[,:]'
+        " skip if it matches `, foo{x}` or `: foo{x}`, which can occur right
+        " before a block with ctors.
+        let open_idx = s:IndexOfMatchingToken(tokens, open_idx)
+        if open_idx != -1
+          let open_idx = index(tokens, '{', open_idx + 1)
+        endif
+      endwhile
+      let i = open_idx + 1
+      if open_idx == -1 || i > len(tokens) + idx3
+        break
+      endif
       "call s:Debug(i, tokens[i], idx3, tokens[idx3])
       let depth = 1
       while depth > 0 && i <= len(tokens) + idx3
@@ -481,19 +495,16 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
         let i += 1
       endwhile
       " require balanced {} and () tokens
-      if depth == 0
-        "call s:Debug tokens[:i-1] tokens[i:] idx3
-        if count(tokens[:i-1], '(') == count(tokens[:i-1], ')')
-          let tokens = tokens[i:]
-          let i = 0
-          "call s:Debug("shorten tokens to", tokens)
-        "else
-          "call s:Debug("unbalanced parenthesis", count(tokens[:i-1], '('), count(tokens[:i-1], ')'), i-1, tokens[:i-1])
-        endif
-        let i = index(tokens, '{', i) + 1
-      else
-        "call s:Debug("breaking the loop")
+      if depth != 0
         break
+      endif
+      "call s:Debug(tokens[:i-1], tokens[i:], idx3)
+      if count(tokens[:i-1], '(') == count(tokens[:i-1], ')')
+        let tokens = tokens[i:]
+        let i = 0
+        "call s:Debug("shorten tokens to", tokens)
+      "else
+        "call s:Debug("unbalanced parenthesis", count(tokens[:i-1], '('), count(tokens[:i-1], ')'), i-1, tokens[:i-1])
       endif
     endwhile
   endif

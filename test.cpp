@@ -360,9 +360,11 @@ public:
     simd(const value_type* __mem, _Flags)
     : simd([&](auto __i) { return __mem[__i]; }),
       _M_data(),
-      _M_foo{1, 2},
-      _M_bar(3)
+      _M_bar(3),
+      _M_foo{1, {2, {3}}, f()}
     {}
+
+  int _M_foo[2];
 
   simd(int)
   : public base<T, U>,
