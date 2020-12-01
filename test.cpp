@@ -15,6 +15,13 @@ template <class T1, class T2>
       g();
     }
 
+template <class T1, class T2>
+  template <class U>
+    constexpr
+    SOME_MACRO
+    void
+    f();
+
 template <bool _Valid = (x == 1)
 			  && foo>
   void

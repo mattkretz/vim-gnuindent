@@ -804,7 +804,7 @@ function! GnuIndent(...) "{{{1
     endwhile
     if i == -1 || tokens[i] =~ '^\%(inline\|static\|constexpr\|consteval\|explicit\|extern\|const\)$'
       call s:Info("no indent assuming return type of function decl/defn")
-      return indent(s:GetPrevSrcLineMatching(lnum, tokens))
+      return indent(s:GetPrevSrcLineMatching(lnum, tokens)) + s:TemplateIndent(tokens)
     endif
   endif
   let ctokens = s:CxxTokenize(current) "{{{2
