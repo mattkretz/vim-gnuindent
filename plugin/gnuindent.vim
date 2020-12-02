@@ -882,11 +882,12 @@ function! GnuIndent(...) "{{{1
   "elseif tokens[-1] =~ '^[{(<\[]$' {{{2
   elseif tokens[-1] =~ '^[{(<\[]$'
     let align_to_identifier_before_opening_token = [1, -1]
-  "elseif tokens[-1] == ',' {{{2
+  "alignment inside argument & initializer lists {{{2
   elseif tokens[-1] == ','
       \ || (ctokens[0] =~ s:operators2_token && ctokens[0] != '(')
       \ || (tokens[-1] =~ s:operators2_token && (tokens[-1] !~ '^[)>]>\?$' ||
         \ s:IndexOfMatchingToken(tokens, -1) == -1))
+    "call s:Debug("consider alignment inside argument list")
     let i = s:IndexOfMatchingToken(tokens, len(tokens))
     while i > 0 && tokens[i] == '<'
       if tokens[i-1] !~ s:identifier_token
@@ -933,17 +934,43 @@ function! GnuIndent(...) "{{{1
       else
         let plnum = -1
       endif
-    elseif tokens[-1] != ',' && s:Index(tokens, s:assignment_op_token, i+1) != -1
-      " we want alignment after assignment op
-      let plnum = -1
     else
-      let tok1 = tokens[:i]
-      let tok2 = tokens[i+1:]
-      let plnum = s:GetPrevSrcLineMatching(lnum, tok1[-1:] + tok2)
-      if plnum != s:GetPrevSrcLineMatching(lnum, tok2)
-        let plnum = -1
-        let align_to_identifier_before_opening_token = [1, i-len(tokens)]
-        call s:Debug("set align_to_identifier_before_opening_token: ", align_to_identifier_before_opening_token)
+      let plnum = 0
+      if tokens[-1] != ','
+        " search for a relevant , between tokens[i] and tokens[-1]
+        let comma = -1
+        let assignment = -1
+        let j = i + 1
+        let depth = 0
+        while j < len(tokens)
+          if tokens[j] =~ '^[({<\[]$'
+            let j = s:IndexOfMatchingToken(tokens, j) + 1
+            if j == 0
+              break
+            endif
+          else
+            if tokens[j] =~ s:assignment_op_token
+              let assignment = j
+            elseif tokens[j] == ','
+              let comma = j
+            endif
+            let j += 1
+          endif
+        endwhile
+        if assignment > comma
+          " we want alignment after assignment op
+          let plnum = -1
+        endif
+      endif
+      if plnum != -1
+        let tok1 = tokens[:i]
+        let tok2 = tokens[i+1:]
+        let plnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
+        if plnum != s:GetPrevSrcLineMatching(lnum, tok2)
+          let plnum = -1
+          let align_to_identifier_before_opening_token = [1, i-len(tokens)]
+          call s:Debug("set align_to_identifier_before_opening_token: ", align_to_identifier_before_opening_token)
+        endif
       endif
     endif
     if plnum >= 0

@@ -393,7 +393,10 @@ public:
 
   template <class U>
     void
-    f(int x = int())
+    f(int x
+	= int(),
+      int y
+	= 1)
     noexcept
     const
     &;
