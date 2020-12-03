@@ -595,6 +595,66 @@ function! s:TemplateIndent(tokens) "{{{1
   return shiftwidth() * depth
 endfunction
 
+function! s:IsFunctionDeclDefn(tokens) "{{{1
+  let i = 0
+  let n = len(a:tokens)
+  " template head(s) with requires clauses
+  while a:tokens[i] == 'template' && a:tokens[i+1] == '<'
+    let i = s:IndexOfMatchingToken(a:tokens, i+1) + 1
+    if a:tokens[i] == 'requires'
+      let i += 1
+      if a:tokens[i] == '('
+        let i = s:IndexOfMatchingToken(a:tokens, i) + 1
+      else
+        if a:tokens[i] =~ s:identifier_token
+          let i += 1
+        endif
+        while a:tokens[i] == '::' && a:tokens[i+1] =~ s:identifier_token
+          let i += 2
+        endwhile
+        if a:tokens[i] != '<'
+          return 0
+        endif
+        let i = s:IndexOfMatchingToken(a:tokens, i) + 1
+      endif
+    endif
+    if i <= 0 || i >= n
+      return 0
+    endif
+  endwhile
+  " return type and stuff
+  let n_identifiers = 0
+  while 1
+    if a:tokens[i] == 'decltype' && a:tokens[i+1] == '('
+      let i = s:IndexOfMatchingToken(a:tokens, i+1) + 1
+      let n_identifiers += 1
+    elseif a:tokens[i] == 'operator' &&
+        \ a:tokens[i+1] =~ '^\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[<>~!%^&*=|,+-]=\?\)$' &&
+        \ a:tokens[i+2] == '(' && n_identifiers > 0
+      return 1
+    elseif a:tokens[i] =~ s:identifier_token
+      if a:tokens[i] !~ '^\%(if\|else\|for\|while\|do\|return\|sizeof\|alignof\|constexpr\|consteval\|static\|inline\|extern\|template\|class\|struct\|requires\|noexcept\|typename\|using\|typedef\|concept\|const\|operator\|namespace\)$'
+        let n_identifiers += 1
+      endif
+      let i += 1
+    elseif a:tokens[i] =~ '^\%(::\|\*\|&&\?\)$'
+      let i += 1
+    elseif a:tokens[i] == '<'
+      let i = s:IndexOfMatchingToken(a:tokens, i) + 1
+    else
+      break
+    endif
+    if i <= 0 || i >= n
+      return 0
+    endif
+  endwhile
+  if a:tokens[i] != '(' || n_identifiers < 1
+    return 0
+  endif
+  let i = s:IndexOfMatchingToken(a:tokens, i)
+  return i > 0
+endfunction
+
 function! GnuIndent(...) "{{{1
   if a:0 == 0
     let lnum = v:lnum
@@ -842,11 +902,11 @@ function! GnuIndent(...) "{{{1
   if empty(ctokens)
     let ctokens = ['']
   endif
-  "if ctokens[0] =~ '^\%(const\|noexcept\|override\|final\|&\|&&\)$' {{{2
-  if ctokens[0] =~ '^\%(const\|noexcept\|override\|final\)$'
-      \ && tokens[-1] == ')'
+  "after function defn/decl: keywords, trailing return type, and ref-qual {{{2
+  if ctokens[0] =~ '^\%(const\|requires\|noexcept\|override\|final\|->\|&&\?\)$' &&
+      \ s:IsFunctionDeclDefn(tokens)
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-    call s:Info("indent keyword after function declaration/definition")
+    call s:Info("indent after function declaration/definition")
     return indent(plnum) + s:TemplateIndent(tokens)
   endif
   let align_to_identifier_before_opening_token = [0, -1] "{{{2

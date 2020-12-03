@@ -289,7 +289,10 @@ public:
 		  : h + 1;
       bool x = sizeof...(Elements) == 1
 		 && !is_same<foo, bar>;
-      if (x)
+      if (y)
+	return sizeof...(Elements) == 1
+		 && !is_same<foo, bar>;
+      else if (x)
 	return sizeof...(Elements) == 1
 		 && !is_same<foo, bar>;
       a = f(xasdf
@@ -403,6 +406,11 @@ public:
 
   simd_mask<T, Abi>
   operator==(simd a, simd b)
+  const;
+
+  auto
+  operator==(simd a, simd b)
+  -> simd::mask_type
   const;
 
   _GLIBCXX_SIMD_INTRINSIC friend constexpr
@@ -578,6 +586,17 @@ template <>
     return;
 #endif
   }
+
+template <class T>
+  requires std::convertible_to<T, int>
+  auto
+  f(int x)
+  noexcept
+  -> decltype(x + 1)
+  {
+    return 0;
+  }
+
 namespace details
 {
   /*
