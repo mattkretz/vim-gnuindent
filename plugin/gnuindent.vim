@@ -709,6 +709,18 @@ function! s:IsFunctionDeclDefn(tokens) "{{{1
   return i > 0
 endfunction
 
+function! s:LastTokensIsAttribute(tokens)
+  " Returns 1 if the last tokens in a:tokens for either a GNU or a standard
+  " C++ attribute. Otherwise returns 0.
+  if a:tokens[-2:] == [')', ')']
+    let i = s:IndexOfMatchingToken(a:tokens, -1)
+    return (i > 0 && a:tokens[i - 1] == '__attribute__' && a:tokens[i + 1] == '(')
+  elseif a:tokens[-2:] == [']', ']']
+    let i = s:IndexOfMatchingToken(a:tokens, -1)
+    return (i >= 0 && a:tokens[i + 1] == '[')
+  endif
+endfunction
+
 function! GnuIndent(...) "{{{1
   " Return the amount of indent according the GNU and libstdc++ indenting rules.
   if a:0 == 0
@@ -957,6 +969,11 @@ function! GnuIndent(...) "{{{1
   "elseif tokens[-1] =~ '^\%(inline\|static\|constexpr\|consteval\|explicit\|extern\|const\)$' {{{2
   elseif tokens[-1] =~ '^\%(inline\|static\|constexpr\|consteval\|explicit\|extern\|const\)$'
     call s:Info("indent like previous line")
+    let [plnum, previous] = s:GetPrevSrcLine(lnum)
+    return indent(plnum)
+  " elseif s:LastTokensIsAttribute(tokens) {{{2
+  elseif s:LastTokensIsAttribute(tokens)
+    call s:Info("indent like previous line after attribute")
     let [plnum, previous] = s:GetPrevSrcLine(lnum)
     return indent(plnum)
   "elseif tokens[-1] =~ '^[_A-Z][_A-Z0-9]*$' {{{2

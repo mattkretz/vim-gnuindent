@@ -625,8 +625,24 @@ void ht()
 	 + 1;
 }
 
+inline
+void f()
+{}
+
+__attribute__((diagnose_as("fun:3")))
+void h()
+{}
+
 namespace X
 {
+  __attribute__((diagnose_as("fun:3")))
+  void h()
+  {}
+
+  [[gnu::diagnose_as("fun")]]
+  void g()
+  {}
+
   void f()
   {
     if (x == 0)
