@@ -1,4 +1,4 @@
-nmap <F5> :source ~/.vim/pack/mattkretz/start/vim-gnuindent/plugin/gnuindent.vim<CR>:echo GetCxxContextTokens(line('.')-1, 20)<CR>
+"nmap <F5> :source ~/.vim/pack/mattkretz/start/vim-gnuindent/plugin/gnuindent.vim<CR>:echo GetCxxContextTokens(line('.')-1, 20)<CR>
 command! SetupGnuIndent setlocal indentexpr=GnuIndent() indentkeys=:,0#,!^F,o,O,e,(,0),<>>,0<lt>
  \0a,0b,0c,0d,0<e>,0f,0g,0h,0i,0j,0k,0l,0m,0n,0<o>,0p,0q,0r,0s,0t,0u,0v,0w,0x,0y,0z,
  \0A,0B,0C,0D,0E,0F,0G,0H,0I,0J,0K,0L,0M,0N,0<O>,0P,0Q,0R,0S,0T,0U,0V,0W,0X,0Y,0Z,
@@ -141,13 +141,35 @@ function! s:IndentForAlignment(lnum, pattern, ...) "{{{1
   return indent(a:lnum) + strlen(matchstr(s, p))
 endfunction
 
+function! s:GetPrevSrcLineInMacro(lnum) "{{{1
+  " Returns [linenumber, string of source code].
+  " Similar to GetPrevSrcLine except that a:lnum must point to a line in a macro definition.
+  let plnum = a:lnum
+  let line = ""
+  while (empty(line)) && plnum > 1
+    let plnum -= 1
+    let line = getline(plnum)
+    if line[-1:] == '\'
+      let line = line[:-2]
+    endif
+    let line = substitute(line, '/\*.\{-}\*/\s*', ' ', 'g')
+    let line = substitute(line, '\s*$', '', '')
+  endwhile
+  return [plnum, line]
+endfunction
+
 function! s:GetPrevSrcLine(lnum) "{{{1
   " Returns [linenumber, string of source code].
   " Similar to GetSrcLine(lnum - 1), except that this function searches more greedily for actual source code.
   let plnum = a:lnum - 1
   let line = s:GetSrcLine(plnum)
+  let maybe_macro = 1
   " ignore preprocessor directives and labels
   while (empty(line) || line == '*/' || line =~ '^\s*#' || line =~ '^\s*\i\+\s*::\@!') && plnum > 1
+    if maybe_macro && line =~ '^\s*#\s*define\s'
+      return s:GetPrevSrcLineInMacro(a:lnum)
+    endif
+    let maybe_macro = 0
     if line =~ '^\s*#\s*el\%(se\|if\)\>'
       " walk up beyond the #if that started it
       let depth = 1
@@ -280,6 +302,7 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   let context = join(a:000)
   let nextline = a:from
   let n = 0
+  let maybe_macro = 1
   while nextline > 0 && (n < a:n || strlen(context) < a:n * &tw) "{{{2
     let s = getline(nextline)
     let nextline -= 1
@@ -301,9 +324,16 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
             let depth += 1
           endif
         endwhile
+      elseif maybe_macro && s =~ '^\s*#\s*define\s'
+        if s[-1:] == '\'
+          let s = s[:-2]
+        endif
+        let context = s . ' ' . context
+        break
       endif
       continue
     endif
+    let maybe_macro = 0
     " trim whitespace and drop // comments
     let s = substitute(s, '^\s*\(.\{-}\)\s*\(//.*\)\?$', '\1', '')
     if empty(s)
@@ -419,11 +449,12 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   let context = substitute(context, '\<if\s*constexpr\>', 'if', 'g')
 
   " remove matching brackets, because they are a headache for GetPrevSrcLineMatching {{{2
-  let pattern = '\[[^\[\]]*\]'
-  while context =~ pattern
-    let context = substitute(context, pattern, ' ', 'g')
-    "call s:Debug(context)
-  endwhile
+  " (disabled, seems like I sprinkled enough \V so that it's not a problem anymore) {{{2
+" let pattern = '\[[^\[\]]*\]'
+" while context =~ pattern
+"   let context = substitute(context, pattern, ' ', 'g')
+"   "call s:Debug(context)
+" endwhile
 
   " simplify conditional expressions `a?b:c` to `a c` {{{2
   let context = substitute(context, '\s*?\%([^?:]\|::\)*::\@!\s*', ' ?: ', 'g')
@@ -439,6 +470,7 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   " 1. don't make the list empty
   " 2. don't consider blocks inside parens (...)
   " 3. don't delete anything inside an open for(...;...;
+  " 4. don't remove blocks immediately followed by an opening paren `[]() {}();` should not become `();`
   call reverse(tokens)
   let idx1 = index(tokens, ';', 1)
   if idx1 != -1
@@ -468,7 +500,7 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   let idx2 = index(tokens, '{', 1)
   let idx3 = index(tokens, '}', 1 + (tokens[0] == ';'))
   while idx3 != -1 && (count(tokens[:idx3], ')') > count(tokens[:idx3], '(')
-      \ || tokens[idx3-1] == '->' || tokens[idx3-1] == ',')
+      \ || tokens[idx3-1] == '->' || tokens[idx3-1] == ',' || tokens[idx3-1] == '(')
     let idx3 = index(tokens, '}', idx3 + 1)
   endwhile
   let idx3 = -1 - idx3
@@ -692,6 +724,12 @@ function! GnuIndent(...) "{{{1
   if current =~ '^\s*#' || current =~ '^\s*\i\+\s*::\@!'
     if current =~ '^\s*\%(public\|private\|protected\|signals\|slots\|Q_SIGNALS\|Q_SLOTS\)\s*:'
       let is_access_specifier = 1
+    elseif current =~ '^\s*#\s*define\s'
+      if getline(lnum) =~ '^\s*#\s*define\s'
+        call s:Info("macro definition")
+        return 0
+      endif
+      " indent code in lines after #define like normal code
     else
       call s:Info("preprocessor or label")
       return cindent(lnum)
@@ -702,6 +740,17 @@ function! GnuIndent(...) "{{{1
   if empty(tokens) "{{{2
     call s:Info("no preceding code")
     return 0
+  endif
+  " remove #define name() {{{2
+  if tokens[0] == "#define" && tokens[1] =~ s:identifier_token
+    let tokens = tokens[2:]
+    if tokens[0] == '(' && tokens[1] == ')'
+      let tokens = tokens[2:]
+    endif
+    if empty(tokens)
+      call s:Info("first line after #define")
+      return shiftwidth()
+    endif
   endif
   " extra indent for template heads (tokens[0] == 'template') {{{2
   if tokens[0] == 'template' && tokens[-1] =~ '>>\?'
@@ -743,7 +792,7 @@ function! GnuIndent(...) "{{{1
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     if depth > 0
       call s:Info("extra indent for condblock", depth)
-      return indent(plnum) + shiftwidth() * depth
+      return s:IndentForAlignment(plnum, '^\s*\zs.\{-}\ze\<'.tokens[0].'\>') + shiftwidth() * depth
     endif
   endif
   "start of {} block (current =~ '^\s*{') {{{2
@@ -833,15 +882,16 @@ function! GnuIndent(...) "{{{1
         call s:Info("indent inside a new {} block:")
         return indent(plnum) + shiftwidth() * (1 - is_access_specifier)
       endif
-      call s:Debug("fall through to align_to_identifier_before_opening_token")
+      "call s:Debug("fall through to align_to_identifier_before_opening_token", plnum, previous, ptok)
     endif
   elseif tokens[-1] == ';' && (tokens[0] != 'for' || s:IndexOfMatchingToken(tokens, 1) != -1) "{{{2
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     call s:Info("align to indent of last statement:", plnum)
+    let last_indent = s:IndentForAlignment(plnum, '^\s*\zs.\{-}\ze\V'.tokens[0])
     if current =~ '^\s*}' || is_access_specifier
-      return indent(plnum) - shiftwidth()
+      return last_indent - shiftwidth()
     else
-      return indent(plnum)
+      return last_indent
     endif
   "elseif current =~ '^\s*}' {{{2
   elseif current =~ '^\s*}'
@@ -1103,6 +1153,7 @@ function! GnuIndent(...) "{{{1
   let indent_offset = 0
   let tokens = s:RemoveControlTokens(tokens)
   if align_to_identifier_before_opening_token[0] "{{{2
+    "call s:Debug("considering align_to_identifier_before_opening_token", align_to_identifier_before_opening_token)
     let j = len(tokens) + align_to_identifier_before_opening_token[1]
     let is_closing = ctokens[0] =~ '^[>)\]]>\?$' &&
         \ s:IndexOfMatchingToken(tokens, ctokens[0]) == j
@@ -1115,12 +1166,14 @@ function! GnuIndent(...) "{{{1
       let i = j - 1
       while i > 0
         call s:Debug("looking at", tokens[i])
-        if tokens[i] =~ '^[)>}]'
+        if tokens[i] =~ '^[)>}\]]$'
           let i = s:IndexOfMatchingToken(tokens, i) - 1
         elseif tokens[i] == '('
           let i -= 1
         elseif tokens[i - 1] =~ '::\|\.\|->'
           let i -= 1 + (i > 1 && tokens[i - 2] =~ '^\%(\i\+\|[)>]\)$')
+        elseif tokens[i - 1] =~ '^[)>}\]]$'
+          let i = s:IndexOfMatchingToken(tokens, i - 1) - 1
         elseif tokens[i] == ','
           let nexti = s:IndexOfMatchingToken(tokens[:i-1], i) - 1
           call s:Debug("considering a jump to", tokens[nexti])
@@ -1157,6 +1210,8 @@ function! GnuIndent(...) "{{{1
   else "{{{2
     let i = s:Index(tokens, s:indent_op_token)
     " search after matching token as long as tokens[i] has a matching token: (), [], {}, and <>
+    " also skip if '*' or '&' are part of a type or a unary operator (which we can't determine so we decide via whitespace:
+    " if the token has whitespace on both sides, it's a binary operator, otherwise it's a unary operator or part of a type)
     while i != -1
       if tokens[i] =~ '^[({\[<]$'
         let j = s:IndexOfMatchingToken(tokens, i)
@@ -1169,6 +1224,19 @@ function! GnuIndent(...) "{{{1
         endif
         "s:Debug("restart search at", j+1, tokens[j+1], "found", i)
         let i = s:Index(tokens, s:indent_op_token, j + 1)
+      elseif tokens[i] =~ '^[&*+-]$' && (i == 0
+          \ || (i > 0 && tokens[i-1] =~ '^\%([([{<]\|'.s:assignment_operators.'\|'.s:compare_operators.'\)$'))
+        " unary operator => skip it
+        let i = s:Index(tokens, s:indent_op_token, i + 1)
+      elseif i > 0 && tokens[i] =~ '^[&*]$' && tokens[i-1] =~ s:identifier_token
+        let tok_lnum = s:GetPrevSrcLineMatching(lnum, tokens[i-1:])
+        let tok_src = s:GetSrcLine(tok_lnum)
+        if tok_src =~ '\V'.tokens[i-1].tokens[i] || tok_src =~ '\V'.tokens[i].tokens[i+1]
+          " no space before or after tokens[i] => skip tokens[i]
+          let i = s:Index(tokens, s:indent_op_token, i + 1)
+        else
+          break
+        endif
       else
         break
       endif

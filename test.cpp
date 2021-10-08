@@ -313,9 +313,9 @@ public:
       /*x*/ for ( int i = 0; i < f((400 < g()), // for()
 				   blah);
 		  ++i)
-	{
-	  foo();
-	}
+	      {
+		foo();
+	      }
       f(
 	{0, 1,
 	 2, 3
@@ -615,10 +615,44 @@ namespace details
   int z;
 }
 
+void ht()
+{
+  constexpr const char* ref
+    = is_int<U>()
+	? "void @1::@3::fun:4<T>() [with T = float]"
+	: "void @1::@2<U>::fun:4<T>() [with T = float; U = char]";
+  *a = 5
+	 + 1;
+}
+
+namespace X
+{
+  void f()
+  {
+    if (x == 0)
+      return 1;
+    else
+      return 2;
+  }
+
 #define foo(x) \
-  if (x == 0) \
-    return 1; \
-  else        \
+  if (x == 0)  \
+    return 1;  \
+  else         \
     return 2;
 
-// vim: indentexpr=GnuIndent() noet sw=2 ts=8 tw=80 cc=81
+#define foo(x) \
+  if (x == 0)  \
+    return 1;  \
+  else         \
+    return 2;
+
+#define foo(x) if (x == 0)  \
+		 return 1;  \
+	       else         \
+		 return 2;
+
+  void g();
+}
+
+// vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()
