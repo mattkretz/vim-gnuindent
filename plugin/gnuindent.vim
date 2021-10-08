@@ -14,9 +14,9 @@ function! s:Debug(...) "{{{1
   "echohl Debug | echom join(a:000) | echohl None
 endfunction "}}}1
 
-" Returns the index of the token matching tokens[start]. If start equals len(tokens)
-" then a matching preceding opening token is searched for.
 function! s:IndexOfMatchingToken(tokens, start) "{{{1
+  " Returns the index of the token matching tokens[start]. If start equals len(tokens)
+  " then a matching preceding opening token is searched for.
   let n = len(a:tokens)
   let depth_idx = {'<': 0, '>': 0, '>>': 0, '(': 1, ')': 1, '{': 2, '}': 2, '[': 3, ']': 3}
   let depth = [0, 0, 0, 0, 0]
@@ -87,6 +87,8 @@ function! s:IndexOfMatchingToken(tokens, start) "{{{1
 endfunction
 
 function! s:Index(tokens, pattern, ...) "{{{1
+  " Returns the smallest index i where tokens[i] matches pattern.
+  " An optional third argument initializes i.
   let i = 0
   if a:0 == 1
     let i = a:1
@@ -103,6 +105,9 @@ function! s:Index(tokens, pattern, ...) "{{{1
 endfunction
 
 function! s:GetSrcLine(n) "{{{1
+  " Returns a string of the n'th line of the current buffer with some extra features:
+  " 1. If preceding lines end with a '\', prepend those lines (without the '\')
+  " 2. Remove all /**/ and // comments
   let i = a:n
   let s = getline(i)
   while getline(i-1)[-1:] == '\'
@@ -114,10 +119,11 @@ function! s:GetSrcLine(n) "{{{1
   return substitute(s, '\s*\(//.*\)\?$', '', '')
 endfunction "}}}1
 
-" lnum: line number where to align to
-" pattern: The match string determines the number of columns to indent
-"   additionally to the indent of the referenced line
 function! s:IndentForAlignment(lnum, pattern, ...) "{{{1
+  " Returns the number of columns to indent to align with the pattern in the given linenumber.
+  " lnum: line number where to align to
+  " pattern: The match string determines the number of columns to indent
+  "   additionally to the indent of the referenced line
   let s = getline(a:lnum)
   let s = substitute(s, '/\*\zs.\{-}\ze\*/', {m -> repeat(' ', strlen(m[0]))}, 'g')
   let s = substitute(s, '//\zs.*$', '', '')
@@ -136,6 +142,8 @@ function! s:IndentForAlignment(lnum, pattern, ...) "{{{1
 endfunction
 
 function! s:GetPrevSrcLine(lnum) "{{{1
+  " Returns [linenumber, string of source code].
+  " Similar to GetSrcLine(lnum - 1), except that this function searches more greedily for actual source code.
   let plnum = a:lnum - 1
   let line = s:GetSrcLine(plnum)
   " ignore preprocessor directives and labels
@@ -214,6 +222,7 @@ let s:logic_op_token = '^\%(&&\|||\|!\)$'
 let s:operators2_token = '^\%('.s:operators2.'\)$'
 
 function! s:CxxTokenize(context) "{{{1
+  " Returns a list of C++ tokens from the given string of code in context.
   return filter(split(a:context, g:cxx_tokenize), '!empty(v:val)')
 endfunction
 
@@ -256,6 +265,18 @@ function! s:SimplifyContext(context, to_keep, ...) "{{{1
 endfunction
 
 function! GetCxxContextTokens(from, n, ...) "{{{1
+  " Returns a list of tokens preceding and including line a:from.
+  " Considers at most a:n lines but at least a:n * &textwidth characters (excluding preprocessor directives and comments).
+  " The context is increased if it doesn't suffice to determine indenting width:
+  " ['}'] does not suffice and requires more context to see what precedes the matching opening brace.
+  "
+  " The context is subsequently simplified / minimized (see below for details).
+  " The minimized context is the tokenized using CxxTokenize.
+  " The token list is further simplified:
+  " - keep only tokens after last block {...}, last ';', or last unmatched '{' (with exceptions)
+  " - char literals are represented by the single token '''
+  " - string literals are represented by the single token '"'
+  "
   let context = join(a:000)
   let nextline = a:from
   let n = 0
@@ -440,7 +461,6 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
       endfor
       if depth == 0
         call filter(tokens, {i, v -> i < lo || i > hi || v =~ '^[;()]$'})
-        "call remove(tokens, index(tokens, ';')+1, for_idx-2)
         let idx1 = index(tokens, ';', index(tokens, 'for', 1))
       endif
     endif
@@ -465,7 +485,6 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
     else
       let tokens = tokens[len(tokens) - idx2:]
     endif
-    "let tokens = tokens[len(tokens) - min([idx1, idx2]):]
   elseif idx2 > -1
     let tokens = tokens[len(tokens) - idx2:]
   elseif idx1 > -1
@@ -561,6 +580,9 @@ function! s:RemoveMatchingAngleBrackets(tokens) "{{{1
 endfunction
 
 function! s:GetPrevSrcLineMatching(lnum, pattern) "{{{1
+  " Return largest linenumber (less than lnum) such that the code between the returned line and lnum matches pattern.
+  " If no such linenumber can be found, returns -1.
+  " The pattern can either be a regex or a list of tokens.
   if type(a:pattern) == v:t_list
     let pattern = '\V'.join(a:pattern, '\.\*')
   else
@@ -656,6 +678,7 @@ function! s:IsFunctionDeclDefn(tokens) "{{{1
 endfunction
 
 function! GnuIndent(...) "{{{1
+  " Return the amount of indent according the GNU and libstdc++ indenting rules.
   if a:0 == 0
     let lnum = v:lnum
   elseif type(a:1) == v:t_string
@@ -1133,6 +1156,7 @@ function! GnuIndent(...) "{{{1
     return cindent(lnum)
   else "{{{2
     let i = s:Index(tokens, s:indent_op_token)
+    " search after matching token as long as tokens[i] has a matching token: (), [], {}, and <>
     while i != -1
       if tokens[i] =~ '^[({\[<]$'
         let j = s:IndexOfMatchingToken(tokens, i)
