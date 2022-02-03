@@ -811,9 +811,12 @@ function! GnuIndent(...) "{{{1
         break
       endif
     endwhile
-    let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-    if depth > 0
+    if i > 0 && i < len(tokens)
+      call s:Debug("dropping", tokens[:i-1], "from context to indent with real statement")
+      let tokens = tokens[i:]
+    elseif depth > 0
       call s:Info("extra indent for condblock", depth)
+      let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
       return s:IndentForAlignment(plnum, '^\s*\zs.\{-}\ze\<'.tokens[0].'\>') + shiftwidth() * depth
     endif
   endif
