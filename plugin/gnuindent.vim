@@ -906,11 +906,21 @@ function! GnuIndent(...) "{{{1
       endif
       "call s:Debug("fall through to align_to_identifier_before_opening_token", plnum, previous, ptok)
     endif
+  elseif tokens[0] == 'case' "{{{2
+    let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+    let last_indent = s:IndentForAlignment(plnum, '^\s*\zs.\{-}\ze\V'.tokens[0])
+    call s:Info("indent below case label:", plnum, last_indent)
+    if current =~ '^\s*}'
+      return last_indent - shiftwidth()
+    elseif current =~ '^\s*case\>'
+      return last_indent
+    endif
+    return last_indent + shiftwidth()
   elseif tokens[-1] == ';' && (tokens[0] != 'for' || s:IndexOfMatchingToken(tokens, 1) != -1) "{{{2
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     call s:Info("align to indent of last statement:", plnum)
     let last_indent = s:IndentForAlignment(plnum, '^\s*\zs.\{-}\ze\V'.tokens[0])
-    if current =~ '^\s*}' || is_access_specifier
+    if current =~ '^\s*\%(}\|case\>\)' || is_access_specifier
       return last_indent - shiftwidth()
     else
       return last_indent

@@ -676,4 +676,21 @@ if (TMPL_ARGS_DEPTH (template_args) > 1
   {
   }
 
+void f(int i)
+{
+  switch (i)
+  {
+    case 1:
+      g(i);
+      return 0;
+    case 2:
+    case 3:
+      ++i; // misaligned after two cases
+      break;
+    case 4:
+    case 5:
+      // indented by hand, but gets auto-indented when I type foo(
+  }
+}
+
 // vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()
