@@ -671,4 +671,9 @@ namespace X
   void g();
 }
 
+if (TMPL_ARGS_DEPTH (template_args) > 1
+      && DECL_CLASS_SCOPE_P (specialized_t))
+  {
+  }
+
 // vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()

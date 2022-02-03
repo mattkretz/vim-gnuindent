@@ -75,9 +75,17 @@ function! s:IndexOfMatchingToken(tokens, start) "{{{1
           return i
         endif
       endif
-      if depth == [0, 0, 0, 0, 0] || (depth[4] == 1 && sort(depth[:3]) == [-1, 0, 0, 0])
+      if depth == [0, 0, 0, 0, 0]
         "call s:Debug("IndexOfMatchingToken", a:tokens, a:start, "returns", i)
         return i
+      elseif depth[4] == 1
+        let d = sort(depth[:3])
+        " A single opening token, while trying to ignore greater-than
+        " operators (depth[0] > 0)
+        if d == [-1, 0, 0, 0] || (d[:2] == [-1, 0, 0] && depth[0] > 0)
+          "call s:Debug("IndexOfMatchingToken", a:tokens, a:start, "returns", i)
+          return i
+        endif
       endif
       let i += direction
     endwhile
@@ -264,7 +272,9 @@ function! s:SimplifyContext(context, to_keep, ...) "{{{1
   else
     throw "invalid arguments to SimplifyContext"
   endif
-  let context = substitute(context, pattern2, '', '')
+  if a:0 == 1 || a:2 != '>'
+    let context = substitute(context, pattern2, '', '')
+  endif
   let m = matchstrpos(context, pattern)
   "call s:Debug("            next:", context, m)
   while m[1] != -1
