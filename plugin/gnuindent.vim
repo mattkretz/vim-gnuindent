@@ -234,7 +234,7 @@ let s:encoding_prefix_opt = '\%(u8\|[uUL]\)\?'
 let s:escape_sequence = '\\[''"?\\abfnrtv]\|\\\o\{1,3}\|\\x\x\x\?'
 let s:char_literal = s:encoding_prefix_opt.'''\%([^''\\]\|'.s:escape_sequence.'\)'''
 let s:string_literal = s:encoding_prefix_opt.'\%("\%([^"\\]\|\\[uU]\%(\x\{4}\)\{1,2}\|'.s:escape_sequence.'\)*"\|R"\([^(]*\)(.\{-})\1"\)'
-let s:operators2 = '->\*\?\|\.\.\.\|\.\*\?\|[()\[\]]\|'.'++\|--\|&&\|||\|<=>\|[|&^!=<>*/%+-]=\|<<\|>>\|::\|[~,:?|&^!=<>*/%+-]'
+let s:operators2 = '->\*\?\|\.\.\.\|\.\*\?\|[()\[\]]\|'.'++\|--\|and\|or\|xor\|not\|&&\|||\|<=>\|[|&^!=<>*/%+-]=\|<<\|>>\|::\|[~,:?|&^!=<>*/%+-]'
 let cxx_tokenize = '\%(\%(sizeof\.\.\.\|'.s:identifier.'\|'.s:float_literal.'\|'.s:int_literal.'\|'.s:char_literal.'\|[;{}]\|'.s:operators2.'\)\@>\zs\)\|\s\+\|\%('.s:char_literal.'\|'.s:string_literal.'\)\@>\zs'
 
 let s:assignment_operators = '\%(<<\|>>\|[/%^&|*+-]\)\?='
@@ -883,6 +883,7 @@ function! GnuIndent(...) "{{{1
     call s:Debug("fall through from : rule", tokens[i], tokens[-1], i, tokens[i-1])
   "elseif function defn/decl {{{2
   elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*('
+      \ && current !~ '^\s*\%(and\|x\?or\|not\)\>'
       \ && tokens[-1] =~ s:identifier_token.'\|>>\|>\|&\|&&\|\*'
       \ && tokens[-1] !~ '^\%(else\|do\)$'
     call s:Info("function definition/declaration")
