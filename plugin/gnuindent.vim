@@ -1227,6 +1227,9 @@ function! GnuIndent(...) "{{{1
             call s:Debug("jumping back from , over opening token", token[nexti+1], "to", token[nexti])
             let i = nexti
           endif
+        elseif tokens[i - 1] == 'typename'
+          let i -= 1
+          break
         else
           break
         endif
