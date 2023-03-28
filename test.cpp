@@ -162,10 +162,13 @@ test_value<V>({}, {1000}, [](V x) {
 });
 
 static inline constexpr std::size_t size
-  = N > 0 ? N : []<std::size_t... Is>(std::index_sequence<Is...>) constexpr {
-		  return std::max({ simdize_size_v<typename simdize_impl<
-						     std::tuple_element_t<Is, Tup>, 0>::type>... });
-		}(std::make_index_sequence<std::tuple_size_v<Tup>>());
+  = N > 0 ? []<int I>(auto x) constexpr {
+	      return 1;
+	    }
+	  : []<std::size_t... Is>(std::index_sequence<Is...>) constexpr {
+	      return std::max({ simdize_size_v<typename simdize_impl<
+						 std::tuple_element_t<Is, Tup>, 0>::type>... });
+	    }(std::make_index_sequence<std::tuple_size_v<Tup>>());
 
 f(asldfkjfun(x, [&]() {
     return x; //

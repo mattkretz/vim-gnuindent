@@ -625,6 +625,7 @@ function! s:GetPrevSrcLineMatching(lnum, pattern) "{{{1
   " Return largest linenumber (less than lnum) such that the code between the returned line and lnum matches pattern.
   " If no such linenumber can be found, returns -1.
   " The pattern can either be a regex or a list of tokens.
+  call s:Debug("GetPrevSrcLineMatching", a:lnum, a:pattern)
   if type(a:pattern) == v:t_list
     let pattern = '\V'.join(a:pattern, '\.\*')
   else
@@ -834,6 +835,7 @@ function! GnuIndent(...) "{{{1
     s:Debug("fall through from block indent section")
   "elseif tokens[-1] == '}' && tokens[s:IndexOfMatchingToken(tokens, -1) - 1] != ',' {{{2
   elseif tokens[-1] == '}' && tokens[s:IndexOfMatchingToken(tokens, -1) - 1] != ','
+        \ && current !~ '^\s*[?:]'
     let plnum = s:GetPrevSrcLineMatching(lnum, '\V\^\s\*'.join(tokens, '\.\*'))
     call s:Info("indent after block", plnum)
     return indent(plnum) + shiftwidth() * ((current =~ '^\s*->') - (current =~ '^\s*}') - is_access_specifier)
@@ -900,7 +902,8 @@ function! GnuIndent(...) "{{{1
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens[-1:])
       let previous = s:GetSrcLine(plnum)
       let ptok = s:CxxTokenize(previous)
-      if previous =~ '^\s*{' || (
+      call s:Debug("ptok: ", ptok)
+      if previous =~ '^\s*{' || (ptok[0] !~ ':' &&
           \ count(ptok, '(') == count(ptok, ')') &&
           \ count(ptok, '[') == count(ptok, ']') &&
           \ count(ptok, '<') == count(ptok, '>'))
@@ -1215,7 +1218,7 @@ function! GnuIndent(...) "{{{1
           let i -= 1 + (i > 1 && tokens[i - 2] =~ '^\%(\i\+\|[)>]\)$')
         elseif tokens[i - 1] =~ '^[)>}\]]$'
           let i = s:IndexOfMatchingToken(tokens, i - 1) - 1
-        elseif tokens[i] == ':' && tokens[i - 1] == '?'
+        elseif tokens[i] == '?' || (tokens[i] == ':' && tokens[i - 1] == '?')
           let i += 1
           break
         elseif tokens[i] == ','
