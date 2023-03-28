@@ -126,6 +126,19 @@ function! s:GetSrcLine(n) "{{{1
   let s = substitute(s, '^.\{-}\ze\*/', '', '')
   return substitute(s, '\s*\(//.*\)\?$', '', '')
 endfunction "}}}1
+function! s:GetSrcLineDropContinuations(n) "{{{1
+  " Returns a string of the n'th line of the current buffer with some extra features:
+  " 1. If this line ends with a '\', remove it
+  " 2. Remove all /**/ and // comments
+  let i = a:n
+  let s = getline(i)
+  if s[-1:] == '\'
+    let s = s[:-2]
+  endif
+  let s = substitute(s, '/\*.\{-}\*/\s*', ' ', 'g')
+  let s = substitute(s, '^.\{-}\ze\*/', '', '')
+  return substitute(s, '\s*\(//.*\)\?$', '', '')
+endfunction "}}}1
 
 function! s:IndentForAlignment(lnum, pattern, ...) "{{{1
   " Returns the number of columns to indent to align with the pattern in the given linenumber.
@@ -312,7 +325,7 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   let context = join(a:000)
   let nextline = a:from
   let n = 0
-  let maybe_macro = 1
+  let maybe_macro = getline(nextline)[-1:] == '\'
   while nextline > 0 && (n < a:n || strlen(context) < a:n * &tw) "{{{2
     let s = getline(nextline)
     let nextline -= 1
@@ -341,6 +354,7 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
         let context = s . ' ' . context
         break
       endif
+      let maybe_macro = 0
       continue
     endif
     let maybe_macro = 0
@@ -758,7 +772,7 @@ function! GnuIndent(...) "{{{1
   else
     let lnum = a:1
   endif
-  let current = s:GetSrcLine(lnum)
+  let current = s:GetSrcLineDropContinuations(lnum)
   let is_access_specifier = 0
   "if current =~ '^\s*#' || current =~ '^\s*\i\+\s*::\@!' {{{2
   if current =~ '^\s*#' || current =~ '^\s*\i\+\s*::\@!'
@@ -791,6 +805,7 @@ function! GnuIndent(...) "{{{1
       call s:Info("first line after #define")
       return shiftwidth()
     endif
+    call s:Debug("hide macro defn", tokens)
   endif
   " extra indent for template heads (tokens[0] == 'template') {{{2
   if tokens[0] == 'template' && tokens[-1] =~ '>>\?'
@@ -1036,6 +1051,7 @@ function! GnuIndent(...) "{{{1
   if empty(ctokens)
     let ctokens = ['']
   endif
+  call s:Debug("current tokens:", ctokens)
   "after function defn/decl: keywords, trailing return type, and ref-qual {{{2
   if ctokens[0] =~ '^\%(const\|requires\|noexcept\|override\|final\|->\|&&\?\)$' &&
       \ s:IsFunctionDeclDefn(tokens)

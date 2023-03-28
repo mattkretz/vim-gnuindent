@@ -691,6 +691,13 @@ namespace X
   void g();
 }
 
+#define VIR_STRUCT_GET_   \
+  auto                    \
+  to_tuple_ref(T &&obj)   \
+  {                       \
+    return 1;             \
+  }                       \
+
 if (TMPL_ARGS_DEPTH (template_args) > 1
       && DECL_CLASS_SCOPE_P (specialized_t))
   {
