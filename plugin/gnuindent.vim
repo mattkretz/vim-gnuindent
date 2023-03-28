@@ -1215,6 +1215,9 @@ function! GnuIndent(...) "{{{1
           let i -= 1 + (i > 1 && tokens[i - 2] =~ '^\%(\i\+\|[)>]\)$')
         elseif tokens[i - 1] =~ '^[)>}\]]$'
           let i = s:IndexOfMatchingToken(tokens, i - 1) - 1
+        elseif tokens[i] == ':' && tokens[i - 1] == '?'
+          let i += 1
+          break
         elseif tokens[i] == ','
           let nexti = s:IndexOfMatchingToken(tokens[:i-1], i) - 1
           call s:Debug("considering a jump to", tokens[nexti])
@@ -1238,7 +1241,7 @@ function! GnuIndent(...) "{{{1
       if align_to_identifier_before_opening_token[1] == 0
         let base_indent_type = "1 shiftwidth behind preceding identifier"
       else
-        let base_indent_type = "1 shiftwidth behind identifier before opening ".tokens[j]
+        let base_indent_type = "1 shiftwidth behind identifier/expression '".join(tokens[i:j-1])."' before opening ".tokens[j]
       endif
       call s:Debug("set up", base_indent_type)
     endif

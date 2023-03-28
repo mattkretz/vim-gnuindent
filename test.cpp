@@ -28,7 +28,7 @@ template <bool _Valid = (x == 1)
 			  ^ x
 			  and bar
 			  or x
-			  xor x)
+			  xor x>
   void
   f()
   {
@@ -149,11 +149,23 @@ f(x, ::blah<1, 2>::foo(
 	blah)
  );
 
+test_value<V>({}, 1000, [](V x) {
+  // blah
+  if constexpr (foo)
+    f();
+});
+
 test_value<V>({}, {1000}, [](V x) {
   // blah
   if constexpr (foo)
     f();
 });
+
+static inline constexpr std::size_t size
+  = N > 0 ? N : []<std::size_t... Is>(std::index_sequence<Is...>) constexpr {
+		  return std::max({ simdize_size_v<typename simdize_impl<
+						     std::tuple_element_t<Is, Tup>, 0>::type>... });
+		}(std::make_index_sequence<std::tuple_size_v<Tup>>());
 
 f(asldfkjfun(x, [&]() {
     return x; //
