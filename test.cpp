@@ -725,4 +725,15 @@ template <class T>
   concept foo = requires { T{}; }
 		  or requires { T{1}; };
 
+template <class T>
+  concept foo2
+    = foo<T> and requires(T* (&x)(int))
+      {
+	T{};
+      }
+	or requires
+      {
+	T{1};
+      };
+
 // vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()

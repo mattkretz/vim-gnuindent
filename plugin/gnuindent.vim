@@ -476,11 +476,25 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   endif
   "call s:Debug(tokens)
 
+  " drop balanced parens after requires {{{2
+  let requires_idx = index(tokens, 'requires')
+  while requires_idx >= 0
+    if requires_idx < len(tokens)-3 && tokens[requires_idx+1] == '('
+      let last_paren = s:IndexOfMatchingToken(tokens, requires_idx + 1)
+      if last_paren > requires_idx + 1
+        let tokens = tokens[:requires_idx] + tokens[last_paren+1:]
+        "call s:Debug("removed balanced parens after requires:", tokens)
+      endif
+    endif
+    let requires_idx = index(tokens, 'requires', requires_idx + 1)
+  endwhile
+
   " keep only tokens after last block {...}, last ';', or last unmatched '{', but: {{{2
   " 1. don't make the list empty
   " 2. don't consider blocks inside parens (...)
   " 3. don't delete anything inside an open for(...;...;
   " 4. don't remove blocks immediately followed by an opening paren `[]() {}();` should not become `();`
+  " 5. don't remove blocks following a requires keyword
   call reverse(tokens)
   let idx1 = index(tokens, ';', 1)
   if idx1 != -1
@@ -507,13 +521,13 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
       endif
     endif
   endif
-  let idx2 = index(tokens, '{', 1)
   let idx3 = index(tokens, '}', 1 + (tokens[0] == ';'))
   while idx3 != -1 && (count(tokens[:idx3], ')') > count(tokens[:idx3], '(')
       \ || tokens[idx3-1] == '->' || tokens[idx3-1] == ',' || tokens[idx3-1] == '(')
     let idx3 = index(tokens, '}', idx3 + 1)
   endwhile
   let idx3 = -1 - idx3
+  let idx2 = index(tokens, '{', 1)
   let brace_count = 1
   while idx2 != -1 && count(tokens[:idx2-1], '}') >= brace_count
     let idx2 = index(tokens, '{', idx2+1)
@@ -537,7 +551,10 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
     let i = 0
     while 1
       let open_idx = index(tokens, '{', i)
-      while open_idx > 2 && tokens[open_idx-1] =~ s:identifier_token && tokens[open_idx-2] =~ '^[,:]'
+      while open_idx > 2 && (tokens[open_idx-1] == 'requires' 
+            \ || (tokens[open_idx-1] == ')' && tokens[open_idx-2] == '('
+            \       && tokens[open_idx-3] == 'requires')
+            \ || (tokens[open_idx-1] =~ s:identifier_token && tokens[open_idx-2] =~ '^[,:]'))
         " skip if it matches `, foo{x}` or `: foo{x}`, which can occur right
         " before a block with ctors.
         let open_idx = s:IndexOfMatchingToken(tokens, open_idx)
@@ -827,9 +844,9 @@ function! GnuIndent(...) "{{{1
       let plnum = s:GetPrevSrcLineMatching(lnum, ['{'])
       call s:Info("indent block in a block", plnum)
       return indent(plnum) + shiftwidth()
-    elseif tokens[-1] !~ '^[,(]$' " not a condblock
-      call s:Info("align block indent to preceding statement")
+    elseif tokens[-1] != 'requires' && tokens[-1] !~ '^[,(]$' " not a condblock
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+      call s:Info("align block indent to preceding statement", tokens[-3:])
       return indent(plnum) + s:TemplateIndent(tokens)
     endif
     s:Debug("fall through from block indent section")
@@ -1330,7 +1347,7 @@ function! GnuIndent(...) "{{{1
         \   tokens[-1] =~ s:operators2_token &&
         \   tokens[-1] !~ '^\%(>>\|[\[\]()<>,]\)$'
         \ ))
-  endif
+  endif "}}}2
   call s:Info(base_indent_type, base_indent, indent_offset, ctokens, align_to_identifier_before_opening_token)
   return base_indent + indent_offset
 endfunction "}}}1
