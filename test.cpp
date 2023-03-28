@@ -721,4 +721,8 @@ if (TREE_CODE (t_i) == TEMPLATE_TYPE_PARM)
   gcc_assert (i == TEMPLATE_TYPE_IDX (t_i)
 		&& level == TEMPLATE_TYPE_LEVEL (t_i));
 
+template <class T>
+  concept foo = requires { T{}; }
+		  or requires { T{1}; };
+
 // vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()

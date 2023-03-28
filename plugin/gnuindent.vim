@@ -834,7 +834,7 @@ function! GnuIndent(...) "{{{1
     endif
     s:Debug("fall through from block indent section")
   "elseif tokens[-1] == '}' && tokens[s:IndexOfMatchingToken(tokens, -1) - 1] != ',' {{{2
-  elseif tokens[-1] == '}' && tokens[s:IndexOfMatchingToken(tokens, -1) - 1] != ','
+  elseif tokens[-1] == '}' && tokens[s:IndexOfMatchingToken(tokens, -1) - 1] !~ ',\|requires'
         \ && current !~ '^\s*[?:]'
     let plnum = s:GetPrevSrcLineMatching(lnum, '\V\^\s\*'.join(tokens, '\.\*'))
     call s:Info("indent after block", plnum)
