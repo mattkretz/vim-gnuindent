@@ -743,4 +743,14 @@ template <class T>
 	T{1};
       };
 
+__x = __binary_op(__x, _Base::template _M_make_simd<_Tp, _Np>(
+			 __vector_permute<1, 0, 3, 2, 5, 4, 7, 6>(
+			   __x._M_data)));
+
+return _SimdImplNeon<simd_abi::_Neon<8>>::_S_reduce(
+	 __y, static_cast<_BinaryOperation&&>(__binary_op));
+
+return _SimdImplNeon<simd_abi::_Neon>::_S_reduce(
+	 __y, static_cast<_BinaryOperation&&>(__binary_op));
+
 // vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()

@@ -1242,11 +1242,15 @@ function! GnuIndent(...) "{{{1
     else
       let i = j - 1
       while i > 0
-        call s:Debug("looking at", tokens[i])
+        call s:Debug("looking at", tokens[i], "with i ==", i)
         if tokens[i] =~ '^[)>}\]]$'
           let i = s:IndexOfMatchingToken(tokens, i) - 1
         elseif tokens[i] == '('
           let i -= 1
+        elseif tokens[i - 1] == 'template'
+          let i -= 1
+        elseif i > 1 && tokens[i - 1] == '::' && tokens[i - 2] =~ '^>>\?$'
+          let i = s:IndexOfMatchingToken(tokens, i - 2) - 1
         elseif tokens[i - 1] =~ '::\|\.\|->'
           let i -= 1 + (i > 1 && tokens[i - 2] =~ '^\%(\i\+\|[)>]\)$')
         elseif tokens[i - 1] =~ '^[)>}\]]$'
