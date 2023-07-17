@@ -753,4 +753,11 @@ return _SimdImplNeon<simd_abi::_Neon<8>>::_S_reduce(
 return _SimdImplNeon<simd_abi::_Neon>::_S_reduce(
 	 __y, static_cast<_BinaryOperation&&>(__binary_op));
 
+detail::simd_for_each_prologue<stdx::resize_simd_t<1, V>>(
+  fun, std::ranges::data(rng));
+
+detail::simd_for_each_prologue<stdx::resize_simd_t<1, V>, write_back,
+			       stdx::memory_alignment_v<V>>(
+  fun, std::ranges::data(rng), to_process);
+
 // vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()

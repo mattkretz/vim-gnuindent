@@ -1243,7 +1243,7 @@ function! GnuIndent(...) "{{{1
       let i = j - 1
       while i > 0
         call s:Debug("looking at", tokens[i], "with i ==", i)
-        if tokens[i] =~ '^[)>}\]]$'
+        if tokens[i] =~ '^[)>}\]]$' || tokens[i] == '>>'
           let i = s:IndexOfMatchingToken(tokens, i) - 1
         elseif tokens[i] == '('
           let i -= 1
