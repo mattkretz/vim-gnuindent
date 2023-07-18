@@ -1235,6 +1235,7 @@ function! GnuIndent(...) "{{{1
     let is_closing = ctokens[0] =~ '^[>)\]]>\?$' &&
         \ s:IndexOfMatchingToken(tokens, ctokens[0]) == j
     let i = index(reverse(tokens[j+1:]), ',')
+    let on_empty = -1
     if !is_closing && i > 0
       let i = len(tokens) - i
       let base_indent_type = "align to identifier after last comma after opening ".tokens[j]
@@ -1246,6 +1247,11 @@ function! GnuIndent(...) "{{{1
         if tokens[i] =~ '^[)>}\]]$' || tokens[i] == '>>'
           let i = s:IndexOfMatchingToken(tokens, i) - 1
         elseif tokens[i] == '('
+          if tokens[i+1] == '[' && tokens[i-1] == '}' && on_empty == -1
+            # this looks like a directly called, unnamed lambda
+            # align to the opening [ of the lambda body
+            let on_empty = i + 1
+          endif
           let i -= 1
         elseif tokens[i - 1] == 'template'
           let i -= 1
@@ -1277,6 +1283,9 @@ function! GnuIndent(...) "{{{1
           break
         endif
       endwhile
+      if i < 0 && on_empty != -1
+        let i = on_empty
+      endif
       let extra_indent = shiftwidth()
       if align_to_identifier_before_opening_token[1] == 0
         let base_indent_type = "1 shiftwidth behind preceding identifier"

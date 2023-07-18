@@ -760,4 +760,24 @@ detail::simd_for_each_prologue<stdx::resize_simd_t<1, V>, write_back,
 			       stdx::memory_alignment_v<V>>(
   fun, std::ranges::data(rng), to_process);
 
+g(f([] () {
+    bar();
+  }));
+
+[&](auto... chunks) {
+  std::invoke(fun, chunks...);
+}([&](auto ptr) {
+    return V([&](auto j) {
+	     return ptr[j];
+	   });
+  }(data_or_ptr(r) + i + (V::size() * Is)), ...
+ );
+
+[&](auto x) { f(x); }([&](auto ptr) {
+			return V([&](auto j) {
+				 return ptr[j];
+			       });
+		      }(foo)
+		     );
+
 // vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()
