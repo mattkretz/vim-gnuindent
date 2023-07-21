@@ -780,4 +780,9 @@ g(f([] () {
 		      }(foo)
 		     );
 
+count = std::count_if(vir::execution::simd, data.begin(), data.end(), [](auto v) {
+	  if constexpr (std::is_floating_point_v<T>)
+	    return fmod(v, T(2)) == T(1);
+	});
+
 // vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()
