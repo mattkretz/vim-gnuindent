@@ -865,9 +865,9 @@ function! GnuIndent(...) "{{{1
       return indent(plnum) + s:TemplateIndent(tokens)
     endif
     s:Debug("fall through from block indent section")
-  "elseif tokens[-1] == '}' && tokens[s:IndexOfMatchingToken(tokens, -1) - 1] != ',' {{{2
-  elseif tokens[-1] == '}' && tokens[s:IndexOfMatchingToken(tokens, -1) - 1] !~ ',\|requires'
-        \ && current !~ '^\s*[?:]'
+  "indent after block {{{2
+  elseif tokens[-1] == '}' && (tokens[s:IndexOfMatchingToken(tokens, -1) - 1] !~ ',\|requires'
+        \ || s:IsFunctionDeclDefn(tokens)) && current !~ '^\s*[?:]'
     let plnum = s:GetPrevSrcLineMatching(lnum, '\V\^\s\*'.join(tokens, '\.\*'))
     call s:Info("indent after block", plnum)
     return indent(plnum) + shiftwidth() * ((current =~ '^\s*->') - (current =~ '^\s*}') - is_access_specifier)

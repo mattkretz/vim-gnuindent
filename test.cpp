@@ -785,4 +785,28 @@ count = std::count_if(vir::execution::simd, data.begin(), data.end(), [](auto v)
 	    return fmod(v, T(2)) == T(1);
 	});
 
+template <auto... Options>
+  struct simd_policy
+  {
+    static constexpr simd_policy
+    prefer_aligned() requires(_prefers_aligned)
+    { return {}; }
+
+    template <int N>
+      static constexpr simd_policy<Options..., detail::simd_policy_unroll_by<N>>
+      unroll_by() requires(_unroll_by == 0)
+      {
+	static_assert(N > 1);
+	return {};
+      }
+
+    template <std::size_t N>
+      static constexpr simd_policy<Options..., detail::simd_policy_size<N>>
+      prefer_size() requires(_size == 0)
+      {
+	static_assert(N > 0);
+	return {};
+      };
+  };
+
 // vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()
