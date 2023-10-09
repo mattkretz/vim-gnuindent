@@ -809,4 +809,7 @@ template <auto... Options>
       };
   };
 
+constexpr const auto*
+operator->() const;
+
 // vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()

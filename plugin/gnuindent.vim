@@ -916,7 +916,7 @@ function! GnuIndent(...) "{{{1
     endif
     call s:Debug("fall through from : rule", tokens[i], tokens[-1], i, tokens[i-1])
   "elseif function defn/decl {{{2
-  elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*('
+  elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|->\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*('
       \ && current !~ '^\s*\%(and\|x\?or\|not\)\>'
       \ && tokens[-1] =~ s:identifier_token.'\|>>\|>\|&\|&&\|\*'
       \ && tokens[-1] !~ '^\%(else\|do\)$'
