@@ -812,4 +812,10 @@ template <auto... Options>
 constexpr const auto*
 operator->() const;
 
+template <typename _Tp>
+  struct _IsValidSizeFor
+  : __bool_constant<(_UsedBytes / sizeof(_Tp) > 1 && _UsedBytes % sizeof(_Tp) == 0
+		       && _UsedBytes <= __sve_vectorized_size_bytes)>
+  {};
+
 // vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()

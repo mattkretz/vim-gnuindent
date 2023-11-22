@@ -72,6 +72,7 @@ function! s:IndexOfMatchingToken(tokens, start) "{{{1
         elseif depth[0] >= 2
           let depth[depth_idx[a:tokens[i]]] -= 2
         elseif depth[1:3] == [0, 0, 0]
+          "call s:Debug("IndexOfMatchingToken", a:tokens, a:start, "returns", i)
           return i
         endif
       endif
@@ -285,6 +286,7 @@ function! s:SimplifyContext(context, to_keep, ...) "{{{1
   else
     throw "invalid arguments to SimplifyContext"
   endif
+  "call s:Debug("SimplifyContext(", a:context, a:to_keep, pattern, pattern2, ")")
   if a:0 == 1 || a:2 != '>'
     let context = substitute(context, pattern2, '', '')
   endif
@@ -456,7 +458,7 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
               \ '\)\+)'
   let context = s:SimplifyContext(context, '{}()', pattern)
   let context = s:SimplifyContext(context, '\[\]', '\[', '\]')
-  let context = substitute(context, '<\zs[^<>]\+\ze>', '', 'g')
+  let context = substitute(context, '<\zs[^<>()]\+\ze>', '', 'g')
   let context = s:SimplifyContext(context, '<>', '<', '>')
 
   " get back the compare and shift operators {{{2
