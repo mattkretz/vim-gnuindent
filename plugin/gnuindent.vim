@@ -1224,7 +1224,7 @@ function! GnuIndent(...) "{{{1
     endif
   endif
   "if tokens[-1] =~ '^[{(<]$' {{{2
-  if ctokens[0] == '('
+  if ctokens[0] == '(' && tokens[-1] != '{'
     let align_to_identifier_before_opening_token = [1, 0]
   endif
   let base_indent = 0

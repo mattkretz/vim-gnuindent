@@ -818,4 +818,12 @@ template <typename _Tp>
 		       && _UsedBytes <= __sve_vectorized_size_bytes)>
   {};
 
-// vim: noet sw=2 ts=8 tw=80 cc=81 indentexpr=GnuIndent()
+void
+_S_store(const _TV __v, bool* __mem)
+{
+  _GLIBCXX_SIMD_INT_PACK(_S_size<__value_type_of<_TV>>, _Is, {
+    ((__mem[_Is] = __v[_Is]), ...);
+  });
+}
+
+// vim: noet sw=2 ts=8 tw=80
