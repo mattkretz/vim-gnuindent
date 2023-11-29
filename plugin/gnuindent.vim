@@ -908,12 +908,17 @@ function! GnuIndent(...) "{{{1
           \ '\V\%('.tokens[i-1].'\.\*\|\^\s\*\)'.join(tokens[i:], '\.\*'))
       let previous = getline(plnum)
       let j = -1
-      while j > i && previous !~ join(tokens[i:j], '[^?]*')
+      while j > i && previous !~ '\V'.join(tokens[i:j], '\.\*')
         let j -= 1
       endwhile
-      let previous = substitute(previous, '\s*'.join(tokens[i+1:j], '[^?]*').'[^?]*$', '', '')
+      let k = -len(tokens)
+      while k < i && previous !~ '\V'.join(tokens[k:i], '\.\*')
+        let k += 1
+      endwhile
+      let pattern = '\V'.join(tokens[k:i], '\.\*').'\zs\s\*'.join(tokens[i+1:j], '\.\*').'\.\*\$'
+      let previous = substitute(previous, pattern, '', '')
       let previous = substitute(previous, '\t', repeat('.', &ts), 'g')
-      call s:Info("align : to corresponding ?", plnum, i, j)
+      call s:Info("align : to corresponding ?", plnum, k, i, j)
       return strlen(previous) - 1
     endif
     call s:Debug("fall through from : rule", tokens[i], tokens[-1], i, tokens[i-1])

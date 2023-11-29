@@ -307,6 +307,13 @@ public:
 		: e
 	    : foo ? g
 		  : h + 1;
+      __tmp = (__xn < __minn)
+		? (__xn == 0 ? __fp_zero : __fp_subnormal)
+		: __fp_normal;
+      __tmp = (__xn < __minn)
+		? __xn == 0 ? __fp_zero : __fp_subnormal
+		: __fp_normal;
+
       bool x = sizeof...(Elements) == 1
 		 && !is_same<foo, bar>;
       if (y)
