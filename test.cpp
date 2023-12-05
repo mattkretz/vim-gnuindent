@@ -83,9 +83,6 @@ template <class T>
   void
   f();
 
-foo({1, 2, 3,
-     4, 5, 6});
-
 using blah = std::integral_constant<
 	       bool, foo
 		       && bar>;
@@ -281,13 +278,6 @@ template <>
     0.0232523847628347268347628375683648273648273462893746827346283746283746283,
     0.1232523847628347268347628375683648273648273462893746827346283746283746283,
   }};
-
-f(0,
-  1, f(1,
-       2), {0, 1,
-	    2, {3,
-		4}
-	   });
 
 struct A
 {
@@ -832,5 +822,23 @@ _S_store(const _TV __v, bool* __mem)
     ((__mem[_Is] = __v[_Is]), ...);
   });
 }
+
+__factor =  __to_x86_intrin(__vec_builtin_type<unsigned, 4>{
+			      unsigned(__f[0]), unsigned(__f[1]),
+			      unsigned(__f[2]), unsigned(__f[3])});
+
+__factor =  __to_x86_intrin(__vec_builtin_type<unsigned, 4>{ // foo
+			      unsigned(__f[0]), unsigned(__f[1]),
+			      unsigned(__f[2]), unsigned(__f[3])});
+
+foo({1, 2, 3,
+     4, 5, 6});
+
+f(0,
+  1, f(1,
+       2), {0, 1,
+	    2, {3,
+		4}
+	   });
 
 // vim: noet sw=2 ts=8 tw=80

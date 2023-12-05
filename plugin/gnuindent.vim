@@ -1191,7 +1191,7 @@ function! GnuIndent(...) "{{{1
       endif
     endif
     if plnum >= 0
-      let previous = getline(plnum)
+      let previous = s:GetSrcLine(plnum)
       let first = 0
       let last = -1
       if tok1[-1] == '<'
@@ -1209,8 +1209,11 @@ function! GnuIndent(...) "{{{1
         let last -= 1
         let pat2 = join(tok2[:last], sep)
       endwhile
-      if !empty(pat2)
+      " If the preceding line ends with { as its last token then don't take
+      " the first branch
+      if !empty(pat2) && !(tok1[-1] == '{' && previous[-1:] == '{')
         call s:Debug("alignment context:", plnum, previous, tok1, pat1, tok2, pat2)
+        let previous = getline(plnum)
         let previous = substitute(previous, '\V'.pat1.'\s\*\zs\.\*'.pat2.'\.\*\$', '', '')
         let previous = substitute(previous, '\t', repeat('.', &ts), 'g')
         let extra_indent = 0
