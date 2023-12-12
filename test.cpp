@@ -841,4 +841,11 @@ f(0,
 		4}
 	   });
 
+std::uint_least64_t _M_signed_zeros : 1
+#if __NO_SIGNED_ZEROS__
+  = 0;
+#else
+  = 1;
+#endif
+
 // vim: noet sw=2 ts=8 tw=80

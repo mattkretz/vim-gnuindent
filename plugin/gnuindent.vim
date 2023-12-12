@@ -1355,7 +1355,8 @@ function! GnuIndent(...) "{{{1
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
       let base_indent = indent(plnum) + max([shiftwidth(), strlen(matchstr(s:GetSrcLine(plnum), 'return\s\+'))])
       let base_indent_type = "align with return"
-    elseif i > 0 && i < len(tokens) - 1
+    elseif i > 0 && i < len(tokens) - 1 && tokens[i] != ':'
+      " exclude aligning to ':' in bitfield decls
       let oplnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
       let base_indent = s:IndentForAlignment(oplnum, '^\s*\zs.*\ze', tokens[i:])
       call s:Info("align with operator on preceding line", i, tokens[i])
