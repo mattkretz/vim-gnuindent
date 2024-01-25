@@ -1,4 +1,4 @@
-"nmap <F5> :source ~/.vim/pack/mattkretz/start/vim-gnuindent/plugin/gnuindent.vim<CR>:echo GetCxxContextTokens(line('.')-1, 20)<CR>
+"nmap <F5> :source ~/.vim/pack/mattkretz/start/vim-gnuindent/plugin/gnuindent.vim<CR>:echo GetCxxContextTokens(line('.')-1, 5)<CR>
 command! SetupGnuIndent setlocal indentexpr=GnuIndent() indentkeys=:,0#,!^F,o,O,e,(,0),<>>,0<lt>
  \0a,0b,0c,0d,0<e>,0f,0g,0h,0i,0j,0k,0l,0m,0n,0<o>,0p,0q,0r,0s,0t,0u,0v,0w,0x,0y,0z,
  \0A,0B,0C,0D,0E,0F,0G,0H,0I,0J,0K,0L,0M,0N,0<O>,0P,0Q,0R,0S,0T,0U,0V,0W,0X,0Y,0Z,
@@ -328,7 +328,7 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   let nextline = a:from
   let n = 0
   let maybe_macro = getline(nextline)[-1:] == '\'
-  while nextline > 0 && (n < a:n || strlen(context) < a:n * &tw) "{{{2
+  while nextline > 0 && (n < a:n || strlen(context) < a:n * &tw || getline(nextline) !~ '^\s*$') "{{{2
     let s = getline(nextline)
     let nextline -= 1
     while getline(nextline)[-1:] == '\'
@@ -791,7 +791,7 @@ function! GnuIndent(...) "{{{1
       return cindent(lnum)
     endif
   endif
-  let tokens = GetCxxContextTokens(lnum-1, 20) "{{{2
+  let tokens = GetCxxContextTokens(lnum-1, 5) "{{{2
   call s:Debug(tokens)
   if empty(tokens) "{{{2
     call s:Info("no preceding code")
