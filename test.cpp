@@ -848,4 +848,9 @@ std::uint_least64_t _M_signed_zeros : 1
   = 1;
 #endif
 
+return __vec_bitcast_trunc<_TV>(
+	 (__vec_bitcast<_Tp>((__xh & short(0xff00)))
+	    | __vec_bitcast<_Tp>(__vec_bitcast<unsigned short>(__xl) >> 8))
+	   & ((__vec_bitcast<_Tp>(__iy) & char(0xf8)) == 0));
+
 // vim: noet sw=2 ts=8 tw=80

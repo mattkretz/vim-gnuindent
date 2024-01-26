@@ -1106,7 +1106,7 @@ function! GnuIndent(...) "{{{1
         \ s:IndexOfMatchingToken(tokens, -1) == -1))
     "call s:Debug("consider alignment inside argument list")
     let i = s:IndexOfMatchingToken(tokens, len(tokens))
-    while i > 0 && tokens[i] == '<'
+    while i > 0 && tokens[i] == '<' "{{{
       if tokens[i-1] !~ s:identifier_token
         " tokens[i] is a less-than operator
         let i = s:IndexOfMatchingToken(tokens[:i-1], i)
@@ -1138,8 +1138,8 @@ function! GnuIndent(...) "{{{1
           break
         endif
       endif
-    endwhile
-    if i == -1
+    endwhile "}}}
+    if i == -1 "{{{
       if tokens[-1] == ','
         " this can happen in initializer lists, because everything up to the opening
         " brace is removed from the context tokens
@@ -1153,7 +1153,7 @@ function! GnuIndent(...) "{{{1
       endif
     else
       let plnum = 0
-      if tokens[-1] != ','
+      if tokens[-1] != ',' "{{{
         " search for a relevant , between tokens[i] and tokens[-1]
         let comma = -1
         let assignment = -1
@@ -1178,7 +1178,7 @@ function! GnuIndent(...) "{{{1
           " we want alignment after assignment op
           let plnum = -1
         endif
-      endif
+      endif "}}}
       if plnum != -1
         let tok1 = tokens[:i]
         let tok2 = tokens[i+1:]
@@ -1189,8 +1189,8 @@ function! GnuIndent(...) "{{{1
           call s:Debug("set align_to_identifier_before_opening_token: ", align_to_identifier_before_opening_token)
         endif
       endif
-    endif
-    if plnum >= 0
+    endif "}}}
+    if plnum >= 0 "{{{
       let previous = s:GetSrcLine(plnum)
       let first = 0
       let last = -1
@@ -1201,18 +1201,18 @@ function! GnuIndent(...) "{{{1
       endif
       let pat1 = join(tok1, sep)
       let pat2 = join(tok2, sep)
-      while previous !~ '\V'.pat1
-        let first += 1
-        let pat1 = join(tok1[first:], sep)
-      endwhile
       while previous !~ '\V'.pat2
         let last -= 1
         let pat2 = join(tok2[:last], sep)
       endwhile
+      while previous !~ '\V'.pat1.'\.\*'.pat2
+        let first += 1
+        let pat1 = join(tok1[first:], sep)
+      endwhile
       " If the preceding line ends with { as its last token then don't take
       " the first branch
       if !empty(pat2) && !(tok1[-1] == '{' && previous[-1:] == '{')
-        call s:Debug("alignment context:", plnum, previous, tok1, pat1, tok2, pat2)
+        call s:Debug("alignment context:", plnum, previous, "tok1:", tok1, "pat1:", pat1, "tok2:", tok2, "pat2:", pat2)
         let previous = getline(plnum)
         let previous = substitute(previous, '\V'.pat1.'\s\*\zs\.\*'.pat2.'\.\*\$', '', '')
         let previous = substitute(previous, '\t', repeat('.', &ts), 'g')
@@ -1229,7 +1229,7 @@ function! GnuIndent(...) "{{{1
         call s:Info('align in initializer list', plnum, tok2)
         return indent(plnum) - shiftwidth() * (ctokens[0] == '}')
       endif
-    endif
+    endif "}}}
   endif
   "if tokens[-1] =~ '^[{(<]$' {{{2
   if ctokens[0] == '(' && tokens[-1] != '{'
