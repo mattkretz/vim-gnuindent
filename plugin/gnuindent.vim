@@ -885,21 +885,7 @@ function! GnuIndent(...) "{{{1
     return indent(plnum) - shiftwidth()
   "elseif current =~ '^\s*::\@!' {{{2
   elseif current =~ '^\s*::\@!'
-    if tokens[-1] =~ '^[)>]>\?$'
-      let i = s:IndexOfMatchingToken(tokens, -1) - 1
-    else
-      let i = len(tokens) - 1
-    endif
-    if tokens[i] == 'noexcept' && tokens[i-1] == ')'
-      let i = s:IndexOfMatchingToken(tokens, i-1) - 1
-    endif
-    if i >= 0 && tokens[i] =~ s:identifier_token &&
-        \ ((tokens[-1] =~ '^\%(noexcept\|)\)$' && (i == 0 || tokens[i-1] =~ '^\%('.s:identifier.'\|[)>]\|>>\|::\)$')) ||
-        \  tokens[i-1] =~ '^\%(class\|struct\)$')
-      call s:Info("no indent for ctor initializer list or class base types")
-      let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      return indent(plnum) + s:TemplateIndent(tokens)
-    elseif count(tokens[:-2], '?') > count(tokens, ':')
+    if count(tokens[:-2], '?') > count(tokens, ':')
       let i = -2
       while tokens[i] != '?' || tokens[i+1] == ':'
         let i -= 1
@@ -920,6 +906,21 @@ function! GnuIndent(...) "{{{1
       let previous = substitute(previous, '\t', repeat('.', &ts), 'g')
       call s:Info("align : to corresponding ?", plnum, k, i, j)
       return strlen(previous) - 1
+    endif
+    if tokens[-1] =~ '^[)>]>\?$'
+      let i = s:IndexOfMatchingToken(tokens, -1) - 1
+    else
+      let i = len(tokens) - 1
+    endif
+    if tokens[i] == 'noexcept' && tokens[i-1] == ')'
+      let i = s:IndexOfMatchingToken(tokens, i-1) - 1
+    endif
+    if i >= 0 && tokens[i] =~ s:identifier_token &&
+        \ ((tokens[-1] =~ '^\%(noexcept\|)\)$' && (i == 0 || tokens[i-1] =~ '^\%('.s:identifier.'\|[)>]\|>>\|::\)$')) ||
+        \  tokens[i-1] =~ '^\%(class\|struct\)$')
+      let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+      call s:Info("no indent for ctor initializer list or class base types (", tokens[i], ")")
+      return indent(plnum) + s:TemplateIndent(tokens)
     endif
     call s:Debug("fall through from : rule", tokens[i], tokens[-1], i, tokens[i-1])
   "elseif function defn/decl {{{2

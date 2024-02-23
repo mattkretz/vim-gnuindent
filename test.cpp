@@ -853,4 +853,7 @@ return __vec_bitcast_trunc<_TV>(
 	    | __vec_bitcast<_Tp>(__vec_bitcast<unsigned short>(__xl) >> 8))
 	   & ((__vec_bitcast<_Tp>(__iy) & char(0xf8)) == 0));
 
+const Rep b_low = disjunct ? std::to_representation(b)
+			   : std::to_representation(b) & ((Rep(1) << extra_bits) - 1);
+
 // vim: noet sw=2 ts=8 tw=80
