@@ -5,13 +5,18 @@ command! SetupGnuIndent setlocal indentexpr=GnuIndent() indentkeys=:,0#,!^F,o,O,
  \0~,0<!>,0%,0^,0&,0<*>,0-,0_,0+,0=,0{,0},0[,0],0;,0",0',0.,0?,0/,0<0>,01,02,03,04,05,06,07,08,09,0<:>,0<Bar>
 
 function! s:Info(...) "{{{1
+  let stack = substitute(expand('<stack>'), expand('<SID>'), 's:', 'g')
   echohl MoreMsg
-  echom "GnuIndent:" join(a:000)
+  echom substitute(stack, 'function \(.*\)\.\.s:Info\[1\]', '\1: ', '').join(a:000)
   echohl None
 endfunction
 
 function! s:Debug(...) "{{{1
-  "echohl Debug | echom join(a:000) | echohl None
+  return
+  let stack = substitute(expand('<stack>'), expand('<SID>'), 's:', 'g')
+  echohl Debug
+  echom substitute(stack, 'function \(.*\)\.\.s:Debug\[1\]', '\1: ', '').join(a:000)
+  echohl None
 endfunction "}}}1
 
 function! s:IndexOfMatchingToken(tokens, start) "{{{1
@@ -43,7 +48,7 @@ function! s:IndexOfMatchingToken(tokens, start) "{{{1
     endif
   endif
   let maybe_shift = []
-  "call s:Debug("IndexOfMatchingToken", a:tokens, a:start, depth, direction)
+  "call s:Debug(a:tokens, a:start, depth, direction)
   if direction != 0
     let i += direction
     while i < n && i >= 0
@@ -72,26 +77,26 @@ function! s:IndexOfMatchingToken(tokens, start) "{{{1
         elseif depth[0] >= 2
           let depth[depth_idx[a:tokens[i]]] -= 2
         elseif depth[1:3] == [0, 0, 0]
-          "call s:Debug("IndexOfMatchingToken", a:tokens, a:start, "returns", i)
+          "call s:Debug(a:tokens, a:start, "returns", i)
           return i
         endif
       endif
       if depth == [0, 0, 0, 0, 0]
-        "call s:Debug("IndexOfMatchingToken", a:tokens, a:start, "returns", i)
+        "call s:Debug(a:tokens, a:start, "returns", i)
         return i
       elseif depth[4] == 1
         let d = sort(depth[:3])
         " A single opening token, while trying to ignore greater-than
         " operators (depth[0] > 0)
         if d == [-1, 0, 0, 0] || (d[:2] == [-1, 0, 0] && depth[0] > 0)
-          "call s:Debug("IndexOfMatchingToken", a:tokens, a:start, "returns", i)
+          "call s:Debug(a:tokens, a:start, "returns", i)
           return i
         endif
       endif
       let i += direction
     endwhile
   endif
-  "call s:Debug("IndexOfMatchingToken", a:tokens, a:start, "returns -1")
+  "call s:Debug(a:tokens, a:start, "returns -1")
   return -1
 endfunction
 
@@ -286,7 +291,7 @@ function! s:SimplifyContext(context, to_keep, ...) "{{{1
   else
     throw "invalid arguments to SimplifyContext"
   endif
-  "call s:Debug("SimplifyContext(", a:context, a:to_keep, pattern, pattern2, ")")
+  "call s:Debug(a:context, a:to_keep, pattern, pattern2)
   if a:0 == 1 || a:2 != '>'
     let context = substitute(context, pattern2, '', '')
   endif
@@ -658,7 +663,7 @@ function! s:GetPrevSrcLineMatching(lnum, pattern) "{{{1
   " Return largest linenumber (less than lnum) such that the code between the returned line and lnum matches pattern.
   " If no such linenumber can be found, returns -1.
   " The pattern can either be a regex or a list of tokens.
-  call s:Debug("GetPrevSrcLineMatching", a:lnum, a:pattern)
+  call s:Debug(a:lnum, a:pattern)
   if type(a:pattern) == v:t_list
     let pattern = '\V'.join(a:pattern, '\.\*')
   else
