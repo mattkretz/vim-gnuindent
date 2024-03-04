@@ -22,6 +22,7 @@ endfunction "}}}1
 function! s:IndexOfMatchingToken(tokens, start) "{{{1
   " Returns the index of the token matching tokens[start]. If start equals len(tokens)
   " then a matching preceding opening token is searched for.
+  " If no matching token exists, return -1.
   let n = len(a:tokens)
   let depth_idx = {'<': 0, '>': 0, '>>': 0, '(': 1, ')': 1, '{': 2, '}': 2, '[': 3, ']': 3}
   let depth = [0, 0, 0, 0, 0]
@@ -39,12 +40,15 @@ function! s:IndexOfMatchingToken(tokens, start) "{{{1
       let depth[4] = 1
       let direction = -1
     else
-      let depth[depth_idx[a:tokens[i]]] = 1 + (a:tokens[i] == '>>')
       if a:tokens[i] =~ '^[<{(\[]$'
         let direction = 1
       elseif a:tokens[i] =~ '^[>})\]]$' || a:tokens[i] == '>>'
         let direction = -1
+      else
+        " there's no token to find a match for
+        return -1
       endif
+      let depth[depth_idx[a:tokens[i]]] = 1 + (a:tokens[i] == '>>')
     endif
   endif
   let maybe_shift = []
@@ -244,6 +248,9 @@ let s:fractional_constant = '\%('.s:digit_seq.'\?\.'.s:digit_seq.'\|'.s:digit_se
 let s:hex_fractional_constant = '\%('.s:hex_digit_seq.'\?\.'.s:hex_digit_seq.'\|'.s:hex_digit_seq.'\.\)'
 let s:identifier = '[a-zA-Z_]\i*'
 let s:identifier_token = '^[a-zA-Z_]\i*$'
+let s:class_key_token = '^\%(class\|struct\|union\)$'
+let s:keyword_token = '^\%(alignas\|alignof\|and\|and_eq\|asm\|auto\|bitand\|bitor\|bool\|break\|case\|catch\|char\|char8_t\|char16_t\|char32_t\|class\|compl\|concept\|const\|consteval\|constexpr\|constinit\|const_cast\|continue\|co_await\|co_return\|co_yield\|decltype\|default\|delete\|do\|double\|dynamic_cast\|else\|enum\|explicit\|export\|extern\|false\|float\|for\|friend\|goto\|if\|inline\|int\|long\|mutable\|namespace\|new\|noexcept\|not\|not_eq\|nullptr\|operator\|or\|or_eq\|private\|protected\|public\|reflexpr\|register\|reinterpret_cast\|requires\|return\|short\|signed\|sizeof\|static\|static_assert\|static_cast\|struct\|switch\|template\|this\|thread_local\|throw\|true\|try\|typedef\|typeid\|typename\|union\|unsigned\|using\|virtual\|void\|volatile\|wchar_t\|while\|xor\|xor_eq\)$'
+let s:nontype_keyword_token = '^\%(alignas\|alignof\|and\|and_eq\|asm\|bitand\|bitor\|break\|case\|catch\|class\|compl\|concept\|const\|consteval\|constexpr\|constinit\|const_cast\|continue\|co_await\|co_return\|co_yield\|decltype\|default\|delete\|do\|dynamic_cast\|else\|enum\|explicit\|export\|extern\|false\|for\|friend\|goto\|if\|inline\|mutable\|namespace\|new\|noexcept\|not\|not_eq\|nullptr\|operator\|or\|or_eq\|private\|protected\|public\|reflexpr\|register\|reinterpret_cast\|requires\|return\|sizeof\|static\|static_assert\|static_cast\|struct\|switch\|template\|this\|thread_local\|throw\|true\|try\|typedef\|typeid\|typename\|union\|using\|virtual\|volatile\|while\|xor\|xor_eq\)$'
 let s:decfloat_literal = '\%(\%('.s:fractional_constant.s:exponent_part.'\?\|'
   \ .s:digit_seq.s:exponent_part.'\)[fFlL]\?\)'
 let s:hexfloat_literal = '\%(0[xX]\%('.s:hex_fractional_constant.'\|'.s:hex_digit_seq.'\)'
@@ -253,7 +260,8 @@ let s:encoding_prefix_opt = '\%(u8\|[uUL]\)\?'
 let s:escape_sequence = '\\[''"?\\abfnrtv]\|\\\o\{1,3}\|\\x\x\x\?'
 let s:char_literal = s:encoding_prefix_opt.'''\%([^''\\]\|'.s:escape_sequence.'\)'''
 let s:string_literal = s:encoding_prefix_opt.'\%("\%([^"\\]\|\\[uU]\%(\x\{4}\)\{1,2}\|'.s:escape_sequence.'\)*"\|R"\([^(]*\)(.\{-})\1"\)'
-let s:operators2 = '->\*\?\|\.\.\.\|\.\*\?\|[()\[\]]\|'.'++\|--\|and\|or\|xor\|not\|&&\|||\|<=>\|[|&^!=<>*/%+-]=\|<<\|>>\|::\|[~,:?|&^!=<>*/%+-]'
+let s:logic_binary_operators = 'and\|or\|&&\|||'
+let s:operators2 = s:logic_binary_operators.'\|->\*\?\|\.\.\.\|\.\*\?\|[()\[\]]\|'.'++\|--\|xor\|not\|<=>\|[|&^!=<>*/%+-]=\|<<\|>>\|::\|[~,:?|&^!=<>*/%+-]'
 let cxx_tokenize = '\%(\%(sizeof\.\.\.\|'.s:identifier.'\|'.s:float_literal.'\|'.s:int_literal.'\|'.s:char_literal.'\|[;{}]\|'.s:operators2.'\)\@>\zs\)\|\s\+\|\%('.s:char_literal.'\|'.s:string_literal.'\)\@>\zs'
 
 let s:assignment_operators = '\%(<<\|>>\|[/%^&|*+-]\)\?='
@@ -497,12 +505,13 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   endif
   "call s:Debug(tokens)
 
-  " drop balanced parens after requires {{{2
+  " drop requirement-parameter-list in a requires-expression {{{2
   let requires_idx = index(tokens, 'requires')
-  while requires_idx >= 0
-    if requires_idx < len(tokens)-3 && tokens[requires_idx+1] == '('
+  while requires_idx > 0
+    if requires_idx + 2 < len(tokens) && tokens[requires_idx+1] == '('
+          \ && tokens[requires_idx-1] =~ '^\%('.s:logic_binary_operators.'\|(\|=\|requires\)$'
       let last_paren = s:IndexOfMatchingToken(tokens, requires_idx + 1)
-      if last_paren > requires_idx + 1
+      if last_paren > requires_idx + 1 && (last_paren + 1 == len(tokens) || tokens[last_paren + 1] == '{')
         let tokens = tokens[:requires_idx] + tokens[last_paren+1:]
         "call s:Debug("removed balanced parens after requires:", tokens)
       endif
@@ -682,6 +691,9 @@ function! s:GetPrevSrcLineMatching(lnum, pattern) "{{{1
 endfunction
 
 function! s:TemplateIndent(tokens) "{{{1
+  " count how many template heads are nested (and thus indented). Typically
+  " only one; out-of-class definitions of member function templates of class
+  " templates can have two.
   let n = len(a:tokens)
   let depth = 0
   if n >= 3 && a:tokens[0] == 'template' && a:tokens[1] == '<'
@@ -698,46 +710,153 @@ function! s:TemplateIndent(tokens) "{{{1
   return shiftwidth() * depth
 endfunction
 
-function! s:IsFunctionDeclDefn(tokens) "{{{1
-  let i = 0
+function! s:AdvanceIdentifierOrSimpleTemplateId(tokens, idx) "{{{1
+  let i = a:idx
   let n = len(a:tokens)
-  " template head(s) with requires clauses
-  while a:tokens[i] == 'template' && a:tokens[i+1] == '<'
-    let i = s:IndexOfMatchingToken(a:tokens, i+1) + 1
-    if a:tokens[i] == 'requires'
-      let i += 1
-      if a:tokens[i] == '('
-        let i = s:IndexOfMatchingToken(a:tokens, i) + 1
-      else
-        if a:tokens[i] =~ s:identifier_token
-          let i += 1
-        endif
-        while a:tokens[i] == '::' && a:tokens[i+1] =~ s:identifier_token
-          let i += 2
-        endwhile
-        if a:tokens[i] != '<'
-          return 0
-        endif
-        let i = s:IndexOfMatchingToken(a:tokens, i) + 1
+  if a:tokens[i] =~ s:identifier_token && a:tokens[i] !~ s:keyword_token
+    if a:tokens[i + 1] == '<'
+      let i = s:IndexOfMatchingToken(a:tokens, i + 1) + 1
+      if i >= 3
+        "call s:Debug("yes, simple-template-id", a:tokens[a:idx:i-1])
+        return i
       endif
+    else
+      "call s:Debug("yes, identifier", a:tokens[i])
+      return i + 1
     endif
-    if i <= 0 || i >= n
-      return 0
+  endif
+  "call s:Debug("no")
+  return a:idx
+endfunction
+
+function! s:AdvanceNestedNameSpecifier(tokens, idx) "{{{1
+  " Returns idx if the tokens starting from idx do not match the
+  " nested-name-specifier grammar.
+  " Otherwise returns the index after the matching tokens.
+  let i = a:idx
+  let n = len(a:tokens)
+  if a:tokens[i] == '::'
+    let i += 1
+  elseif a:tokens[i] =~ s:identifier_token && a:tokens[i] !~ s:keyword_token
+    " type-name = (class|enum|typedef)-name = identifier/simple-template-id
+    " namespace-name = identifier
+    " computed-type-specifier = (decltype|pack-index)-specifier
+    let i += 1
+    if i + 1 < n && a:tokens[i] == '<'
+      let i = s:IndexOfMatchingToken(a:tokens, i) + 1
+    elseif i + 2 < n && a:tokens[i] == '...' && a:tokens[i + 1] == '['
+      let i = s:IndexOfMatchingToken(a:tokens, i + 1) + 1
+    elseif i + 2 < n && a:tokens[i] == 'decltype' && a:tokens[i + 1] == '('
+      let i = s:IndexOfMatchingToken(a:tokens, i + 1) + 1
+    endif
+    if i <= 0 || i >= n || a:tokens[i] != '::'
+      return a:idx
+    endif
+    let i += 1
+  endif
+  while i + 1 < n
+    " identifier or templateₒₚₜ simple-template-id
+    if a:tokens[i] == 'template' && i + 3 < n && a:tokens[i + 2] == '<'
+      let i += 1
+    endif
+    if a:tokens[i] =~ s:identifier_token && a:tokens[i] !~ s:keyword_token
+      if a:tokens[i + 1] == '::'
+        let i += 2
+      elseif a:tokens[i + 1] == '<'
+        let j = s:IndexOfMatchingToken(a:tokens, i + 1) + 1
+        if j <= 0 || a:tokens[j] != '::'
+          return i
+        endif
+        let i = 1 + j
+      endif
+    else
+      return i
     endif
   endwhile
+  return i
+endfunction
+
+function! s:AdvanceTemplateHead(tokens, idx) "{{{1
+  " Returns idx if the tokens starting from idx do not match the
+  " template-head grammar.
+  " Otherwise returns the index after the matching tokens.
+  let i = a:idx
+  "call s:Debug("init", i)
+  let n = len(a:tokens)
+  " template head(s) with requires clauses
+  while i + 1 < n && a:tokens[i] == 'template' && a:tokens[i+1] == '<'
+    let i = s:IndexOfMatchingToken(a:tokens, i+1) + 1
+    if i <= 0
+      call s:Debug("no")
+      return a:idx
+    endif
+    if i < n && a:tokens[i] == 'requires'
+      while 1
+        "call s:Debug("looping", i)
+        let i += 1
+        if a:tokens[i] == '('
+          let i = s:IndexOfMatchingToken(a:tokens, i) + 1
+        elseif a:tokens[i] == 'requires'
+          " requirement-parameter-list always removed from a:tokens by GetCxxContextTokens
+          "if a:tokens[i + 1] == '('
+          "  let i = s:IndexOfMatchingToken(a:tokens, i + 1)
+          "endif
+          if a:tokens[i + 1] == '{'
+            let i = s:IndexOfMatchingToken(a:tokens, i + 1) + 1
+          else
+            call s:Debug("no")
+            return a:idx;
+          endif
+        else
+          let last = i
+          let j = s:AdvanceNestedNameSpecifier(a:tokens, i)
+          let i = s:AdvanceIdentifierOrSimpleTemplateId(a:tokens, j)
+          if j == i
+            call s:Debug("no", i, j)
+            return a:idx
+          endif
+          "call s:Debug("advance by ", a:tokens[last:i-1])
+        endif
+        if i == n
+          call s:Debug("yes", i)
+          return i
+        elseif i <= 0 || i > n
+          call s:Debug("no")
+          return a:idx
+        endif
+        if a:tokens[i] !~ '^\%('.s:logic_binary_operators.'\)$'
+          break
+        endif
+      endwhile
+    endif
+  endwhile
+  call s:Debug("yes", i)
+  return i
+endfunction
+
+function! s:AdvanceFunctionDecl(tokens, idx) "{{{1
+  " Returns idx if the first tokens do not match the function decl/defn grammar
+  " Otherwise returns the index after the closing paren of the function argument
+  " list.
+  let i = s:AdvanceTemplateHead(a:tokens, a:idx)
+  let n = len(a:tokens)
   " return type and stuff
-  let n_identifiers = 0
-  while 1
-    if a:tokens[i] == 'decltype' && a:tokens[i+1] == '('
+  let maybe_return_type = 0
+  while i < n
+    if i + 2 < n && a:tokens[i] == 'decltype' && a:tokens[i+1] == '('
       let i = s:IndexOfMatchingToken(a:tokens, i+1) + 1
-      let n_identifiers += 1
-    elseif a:tokens[i] == 'operator' &&
+      let maybe_return_type += 1
+    elseif i + 2 < n && a:tokens[i] == 'explicit' && a:tokens[i+1] == '('
+      let i = s:IndexOfMatchingToken(a:tokens, i+1) + 1
+    elseif i + 2 < n && a:tokens[i] == 'operator' &&
         \ a:tokens[i+1] =~ '^\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[<>~!%^&*=|,+-]=\?\)$' &&
-        \ a:tokens[i+2] == '(' && n_identifiers > 0
-      return 1
+        \ a:tokens[i+2] == '(' && maybe_return_type > 0
+      let i += 2
+      break
     elseif a:tokens[i] =~ s:identifier_token
-      if a:tokens[i] !~ '^\%(if\|else\|for\|while\|do\|return\|sizeof\|alignof\|constexpr\|consteval\|static\|inline\|extern\|template\|class\|struct\|requires\|noexcept\|typename\|using\|typedef\|concept\|const\|operator\|namespace\)$'
-        let n_identifiers += 1
+      if a:tokens[i] !~ s:nontype_keyword_token
+        " it's either the function name, a macro, or the return type
+        let maybe_return_type += 1
       endif
       let i += 1
     elseif a:tokens[i] =~ '^\%(::\|\*\|&&\?\)$'
@@ -747,18 +866,55 @@ function! s:IsFunctionDeclDefn(tokens) "{{{1
     else
       break
     endif
-    if i <= 0 || i >= n
-      return 0
+    if i <= 0
+      break
     endif
   endwhile
-  if a:tokens[i] != '(' || n_identifiers < 1
-    return 0
+  if i <= 0 || i >= n || a:tokens[i] != '(' || maybe_return_type < 1
+    return a:idx
   endif
   let i = s:IndexOfMatchingToken(a:tokens, i)
-  return i > 0
+  if i <= 0 || i >= n
+    return a:idx
+  else
+    return i + 1
+  endif
 endfunction
 
-function! s:LastTokensIsAttribute(tokens)
+function! s:AdvanceClassHead(tokens, idx) "{{{1
+  " Returns idx if the first tokens do not match the template-headₒₚₜ class-head (without base-clause) grammar.
+  " Otherwise returns the index after the closing paren of the function argument
+  " list.
+  let i = s:AdvanceTemplateHead(a:tokens, a:idx)
+  let n = len(a:tokens)
+  if i < n && a:tokens[i] =~ s:class_key_token
+    let i = s:AdvanceAttributeSpecifierSeq(a:tokens, i + 1)
+    if i >= n
+      return a:idx
+    endif
+    let i = s:AdvanceNestedNameSpecifier(a:tokens, i)
+    if a:tokens[i] =~ s:identifier_token
+      let i += 1
+      if i < n && a:tokens[i] == '<'
+        let i = s:IndexOfMatchingToken(a:tokens, i) + 1
+        if i <= 0
+          return a:idx
+        endif
+      endif
+
+      " class-virt-specifierₒₚₜ
+      if i < n && a:tokens[i] == 'final'
+        let i += 1
+      endif
+
+      " don't advance base-clauseₒₚₜ
+      return i
+    endif
+  endif
+  return a:idx
+endfunction
+
+function! s:LastTokensIsAttribute(tokens) "{{{1
   " Returns 1 if the last tokens in a:tokens for either a GNU or a standard
   " C++ attribute. Otherwise returns 0.
   if a:tokens[-2:] == [')', ')']
@@ -770,8 +926,60 @@ function! s:LastTokensIsAttribute(tokens)
   endif
 endfunction
 
+function! s:AdvanceNoexceptSpecifier(tokens, idx) "{{{1
+  " Returns idx if the tokens starting from idx do not match the
+  " noexcept-specifier grammar.
+  " Otherwise returns the index after the matching tokens.
+  let i = a:idx
+  if i < len(a:tokens) && a:tokens[i] == 'noexcept'
+    if a:tokens[i + 1] == '('
+      let i = s:IndexOfMatchingToken(a:tokens, i + 1)
+      if i == -1
+        call s:Debug("no, returns", a:idx)
+        return a:idx
+      endif
+    endif
+    call s:Debug("yes, returns", i + 1)
+    return i + 1
+  endif
+  call s:Debug("no, returns", a:idx)
+  return a:idx
+endfunction
+
+function! s:AdvanceAttributeSpecifierSeq(tokens, idx) "{{{1
+  " Returns idx if the tokens starting from idx do not match the
+  " attribute-specifier-seq grammar.
+  " Otherwise returns the index after the matching tokens.
+  let n = len(a:tokens)
+  if a:idx + 3 < n && a:tokens[a:idx] == '[' && a:tokens[a:idx + 1] == '['
+    let i = s:IndexOfMatchingToken(a:tokens, a:idx + 1) + 1
+    if i < n && a:tokens[i] == ']'
+      call s:Debug("yes, returns", i + 1)
+      return i + 1
+    endif
+  endif
+  call s:Debug("no, returns", a:idx)
+  return a:idx
+endfunction
+
+function! s:AlignedIndent(base_indent_type, base_indent, indent_offset, tokens, ctokens, align_to_identifier_before_opening_token) "{{{1
+  if a:indent_offset == 0
+    let indent_offset = shiftwidth() * ((
+        \   a:ctokens[0] =~ s:operators2_token &&
+        \   a:ctokens[0] !~ '^[\[({})\]]$'
+        \ ) || (
+        \   a:tokens[-1] =~ s:operators2_token &&
+        \   a:tokens[-1] !~ '^\%(>>\|[\[\]()<>,]\)$'
+        \ ))
+  else
+    let indent_offset = a:indent_offset
+  endif
+  call s:Info(a:base_indent_type, a:base_indent, indent_offset, a:ctokens, a:align_to_identifier_before_opening_token)
+  return a:base_indent + indent_offset
+endfunction
+
 function! GnuIndent(...) "{{{1
-  " Return the amount of indent according the GNU and libstdc++ indenting rules.
+  " Return the indent column number according to the GNU and libstdc++ indenting rules (and my own, I guess).
   if a:0 == 0
     let lnum = v:lnum
   elseif type(a:1) == v:t_string
@@ -796,8 +1004,10 @@ function! GnuIndent(...) "{{{1
       return cindent(lnum)
     endif
   endif
-  let tokens = GetCxxContextTokens(lnum-1, 5) "{{{2
+  let tokens = GetCxxContextTokens(lnum-1, 5) " {{{2
   call s:Debug(tokens)
+  let funDeclEnd = s:AdvanceFunctionDecl(tokens, 0) " {{{2
+  call s:Debug("AdvanceFunctionDecl(tokens, 0) =", funDeclEnd, ", len(tokens) =", len(tokens))
   if empty(tokens) "{{{2
     call s:Info("no preceding code")
     return 0
@@ -866,15 +1076,27 @@ function! GnuIndent(...) "{{{1
       let plnum = s:GetPrevSrcLineMatching(lnum, ['{'])
       call s:Info("indent block in a block", plnum)
       return indent(plnum) + shiftwidth()
-    elseif tokens[-1] != 'requires' && tokens[-1] !~ '^[,(]$' " not a condblock
+    elseif tokens[-1] == 'requires'
+      let concept_idx = index(tokens, 'concept')
+      if concept_idx != -1
+        let plnum = s:GetPrevSrcLineMatching(lnum, tokens[concept_idx:-1])
+        call s:Info("align { of a requires-expression one shiftwidth after preceding concept keyword")
+        return indent(plnum) + s:TemplateIndent(tokens)
+      else
+        let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+        call s:Info("align { of a requires-expression")
+        return indent(plnum) + s:TemplateIndent(tokens) + shiftwidth()
+      endif
+    elseif tokens[-1] !~ '^[,(]$'
+      " not a condblock
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
       call s:Info("align block indent to preceding statement", tokens[-3:])
       return indent(plnum) + s:TemplateIndent(tokens)
     endif
-    s:Debug("fall through from block indent section")
+    call s:Debug("fall through from block indent section")
   "indent after block {{{2
   elseif tokens[-1] == '}' && (tokens[s:IndexOfMatchingToken(tokens, -1) - 1] !~ ',\|requires'
-        \ || s:IsFunctionDeclDefn(tokens)) && current !~ '^\s*[?:]'
+        \ || funDeclEnd > 0) && current !~ '^\s*[?:]'
     let plnum = s:GetPrevSrcLineMatching(lnum, '\V\^\s\*'.join(tokens, '\.\*'))
     call s:Info("indent after block", plnum)
     return indent(plnum) + shiftwidth() * ((current =~ '^\s*->') - (current =~ '^\s*}') - is_access_specifier)
@@ -890,6 +1112,7 @@ function! GnuIndent(...) "{{{1
     return indent(plnum) - shiftwidth()
   "elseif current =~ '^\s*::\@!' {{{2
   elseif current =~ '^\s*::\@!'
+    call s:Debug("leading ':', consider ?: alignment, class base type, or ctor initializer list")
     if count(tokens[:-2], '?') > count(tokens, ':')
       let i = -2
       while tokens[i] != '?' || tokens[i+1] == ':'
@@ -912,22 +1135,19 @@ function! GnuIndent(...) "{{{1
       call s:Info("align : to corresponding ?", plnum, k, i, j)
       return strlen(previous) - 1
     endif
-    if tokens[-1] =~ '^[)>]>\?$'
-      let i = s:IndexOfMatchingToken(tokens, -1) - 1
-    else
-      let i = len(tokens) - 1
-    endif
-    if tokens[i] == 'noexcept' && tokens[i-1] == ')'
-      let i = s:IndexOfMatchingToken(tokens, i-1) - 1
-    endif
-    if i >= 0 && tokens[i] =~ s:identifier_token &&
-        \ ((tokens[-1] =~ '^\%(noexcept\|)\)$' && (i == 0 || tokens[i-1] =~ '^\%('.s:identifier.'\|[)>]\|>>\|::\)$')) ||
-        \  tokens[i-1] =~ '^\%(class\|struct\)$')
+
+    if (s:AdvanceAttributeSpecifierSeq(tokens, s:AdvanceNoexceptSpecifier(tokens, funDeclEnd)) == len(tokens))
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      call s:Info("no indent for ctor initializer list or class base types (", tokens[i], ")")
+      call s:Info("no indent for ctor initializer list")
       return indent(plnum) + s:TemplateIndent(tokens)
     endif
-    call s:Debug("fall through from : rule", tokens[i], tokens[-1], i, tokens[i-1])
+
+    if (s:AdvanceClassHead(tokens, 0) == len(tokens))
+      let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+      call s:Info("no indent for class base types")
+      return indent(plnum) + s:TemplateIndent(tokens)
+    endif
+    call s:Debug("fall through from : rule")
   "elseif function defn/decl {{{2
   elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|->\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*('
       \ && current !~ '^\s*\%(and\|x\?or\|not\)\>'
@@ -1067,7 +1287,7 @@ function! GnuIndent(...) "{{{1
   call s:Debug("current tokens:", ctokens)
   "after function defn/decl: keywords, trailing return type, and ref-qual {{{2
   if ctokens[0] =~ '^\%(const\|requires\|noexcept\|override\|final\|->\|&&\?\)$' &&
-      \ s:IsFunctionDeclDefn(tokens)
+      \ funDeclEnd > 0 && index(tokens[funDeclEnd:-1], ':') == -1
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
     call s:Info("indent after function declaration/definition")
     return indent(plnum) + s:TemplateIndent(tokens)
@@ -1264,8 +1484,8 @@ function! GnuIndent(...) "{{{1
           let i = s:IndexOfMatchingToken(tokens, i) - 1
         elseif tokens[i] == '('
           if tokens[i+1] == '[' && tokens[i-1] == '}' && on_empty == -1
-            # this looks like a directly called, unnamed lambda
-            # align to the opening [ of the lambda body
+            " this looks like a directly called, unnamed lambda
+            " align to the opening [ of the lambda body
             let on_empty = i + 1
           endif
           let i -= 1
@@ -1316,8 +1536,9 @@ function! GnuIndent(...) "{{{1
       call s:Info("align with identifier before opening", tokens[j], base_indent, plnum, i, tokens[i:])
       return base_indent
     endif
-    let base_indent += extra_indent
+    return s:AlignedIndent(base_indent_type, base_indent + extra_indent, indent_offset, tokens, ctokens, align_to_identifier_before_opening_token)
   elseif tokens == ['/*'] "{{{2
+    call s:Info("using cindent inside /*...*/ comment")
     return cindent(lnum)
   else "{{{2
     let i = s:Index(tokens, s:indent_op_token)
@@ -1355,47 +1576,33 @@ function! GnuIndent(...) "{{{1
     endwhile
     if i > 0 && i < len(tokens) - 1 && tokens[i] =~ s:assignment_op_token
       let oplnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
-      let base_indent = s:IndentForAlignment(oplnum, '^\s*\zs.*'.tokens[i].'\s*\ze', tokens[i+1:])
-      let base_indent_type = "align to assignment operator"
+      return s:AlignedIndent("align to assignment operator",
+            \ s:IndentForAlignment(oplnum, '^\s*\zs.*'.tokens[i].'\s*\ze', tokens[i+1:]),
+            \ 0,
+            \ tokens, ctokens, align_to_identifier_before_opening_token)
     elseif tokens[0] == 'return'
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      let base_indent = indent(plnum) + max([shiftwidth(), strlen(matchstr(s:GetSrcLine(plnum), 'return\s\+'))])
-      let base_indent_type = "align with return"
+      return s:AlignedIndent("align with return",
+            \ indent(plnum) + max([shiftwidth(), strlen(matchstr(s:GetSrcLine(plnum), 'return\s\+'))]),
+            \ 0,
+            \ tokens, ctokens, align_to_identifier_before_opening_token)
     elseif i > 0 && i < len(tokens) - 1 && tokens[i] != ':'
       " exclude aligning to ':' in bitfield decls
       let oplnum = s:GetPrevSrcLineMatching(lnum, tokens[i:])
-      let base_indent = s:IndentForAlignment(oplnum, '^\s*\zs.*\ze', tokens[i:])
       call s:Info("align with operator on preceding line", i, tokens[i])
-      return base_indent
+      return s:IndentForAlignment(oplnum, '^\s*\zs.*\ze', tokens[i:])
     elseif tokens[0] == 'template'
       " if not aligned, add 1 shiftwidth for templates
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      let base_indent = indent(plnum) + s:TemplateIndent(tokens)
-      let base_indent_type = "1 shiftwidth behind template"
-      " add 1 shiftwidth per open scope
-      " (this shouldn't happen: either align to opening scope or the preceding identifier)
-      "let indent_offset += shiftwidth() * (
-      "  \   count(tokens, '\[') + count(tokens, '(') + count(tokens, '<')
-      "  \ - count(tokens, '\]') - count(tokens, ')') - count(tokens, '>')
-      "  \ - 2*count(tokens, '>>'))
-    else
-      let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      let base_indent = indent(plnum)
-      let base_indent_type = "same base indent as first line of statement"
-      let indent_offset = shiftwidth()
+      return s:AlignedIndent("1 shiftwidth behind template",
+            \ indent(plnum) + s:TemplateIndent(tokens), 0,
+            \ tokens, ctokens, align_to_identifier_before_opening_token)
     endif
   endif
-  if indent_offset == 0 "{{{2
-    let indent_offset = shiftwidth() * ((
-        \   ctokens[0] =~ s:operators2_token &&
-        \   ctokens[0] !~ '^[\[({})\]]$'
-        \ ) || (
-        \   tokens[-1] =~ s:operators2_token &&
-        \   tokens[-1] !~ '^\%(>>\|[\[\]()<>,]\)$'
-        \ ))
-  endif "}}}2
-  call s:Info(base_indent_type, base_indent, indent_offset, ctokens, align_to_identifier_before_opening_token)
-  return base_indent + indent_offset
+  let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+  return s:AlignedIndent("same base indent as first line of statement",
+        \ indent(plnum), shiftwidth(),
+        \ tokens, ctokens, align_to_identifier_before_opening_token)
 endfunction "}}}1
 
 " vim: foldmethod=marker foldmarker={{{,}}} sw=2 et

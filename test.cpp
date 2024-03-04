@@ -214,9 +214,9 @@ using all_udt_simd
 
 template <typename _Tp>
   concept __tuple_of_simd_like = requires(_Tp __a)
-  {
-    {foo} -> bar;
-  };
+    {
+      {foo} -> bar;
+    };
 
 template <typename _From, typename _To>
   concept __converts_to_higher_integer_rank
@@ -410,6 +410,17 @@ public:
   : _M_data()
   {
   }
+
+  constexpr
+  simd()
+  noexcept(false) [[foo, bar::baz(1)]]
+  : _M_data()
+  {}
+
+  constexpr
+  simd() [[foo, bar::baz(1)]]
+  : _M_data()
+  {}
 
   template <class U>
     void
@@ -606,6 +617,11 @@ template <>
 
 template <class T>
   requires std::convertible_to<T, int>
+    and requires (T x)
+    {
+      { x + x } -> same_as<T>;
+    }
+    or foo<T>
   auto
   f(int x)
   noexcept
@@ -732,13 +748,13 @@ template <class T>
 template <class T>
   concept foo2
     = foo<T> and requires(T* (&x)(int))
-      {
-	T{};
-      }
+    {
+      T{};
+    }
 	or requires
-      {
-	T{1};
-      };
+    {
+      T{1};
+    };
 
 __x = __binary_op(__x, _Base::template _M_make_simd<_Tp, _Np>(
 			 __vector_permute<1, 0, 3, 2, 5, 4, 7, 6>(
@@ -855,5 +871,20 @@ return __vec_bitcast_trunc<_TV>(
 
 const Rep b_low = disjunct ? std::to_representation(b)
 			   : std::to_representation(b) & ((Rep(1) << extra_bits) - 1);
+
+template <typename _It, typename... _Flags>
+  requires __detail::__loadstore_convertible_to<std::iter_value_t<_It>, value_type, _Flags...>
+    and std::contiguous_iterator<_It>
+  _GLIBCXX_SIMD_ALWAYS_INLINE constexpr
+  explicit(not __detail::__value_preserving_convertible_to<_Up, value_type>
+	     || __detail::__higher_rank_than<_Up, value_type>)
+  basic_simd(_It __first, const mask_type& __k, simd_flags<_Flags...> __flags = {}) noexcept
+  : _M_data(_RepSimd([&](int __i) {
+	      const auto* __ptr
+		= __flags.template _S_adjust_pointer<basic_simd>(std::to_address(__first));
+	      return __k[__i] ? std::to_representation(__ptr[__i])
+			      : std::to_representation(value_type());
+	    }))
+  {}
 
 // vim: noet sw=2 ts=8 tw=80
