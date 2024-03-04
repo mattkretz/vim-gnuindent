@@ -277,6 +277,8 @@ let s:arith_op_token = '^[/*%+-]$'
 let s:bit_op_token = '^[~&|^]$'
 let s:logic_op_token = '^\%(&&\|||\|!\)$'
 let s:operators2_token = '^\%('.s:operators2.'\)$'
+let s:operator_fun = '\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|<<=\|>>=\|->\|[<>~!%^&*/=|,+-]=\?\)'
+let s:operator_fun_token = '^'.s:operator_fun.'$'
 
 function! s:CxxTokenize(context) "{{{1
   " Returns a list of C++ tokens from the given string of code in context.
@@ -444,10 +446,14 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   " guard -> >= <= and << against <...> substitution. {{{2
   " This leaves operator> operator< and operator>> to disambiguate later
   let context = substitute(context, '->', '$`dr`', 'g')
+  let context = substitute(context, '>>=', '$`sra`', 'g')
   let context = substitute(context, '>=', '$`ge`', 'g')
   let context = substitute(context, '<=', '$`le`', 'g')
   let context = substitute(context, '<<', '$`sl`', 'g')
-  let context = substitute(context, '>>=', '$`sra`', 'g')
+  let context = substitute(context, 'operator\s*<', '$`oplt`', 'g')
+  let context = substitute(context, 'operator\s*>>', '$`opsr`', 'g')
+  let context = substitute(context, 'operator\s*>=', '$`opge`', 'g')
+  let context = substitute(context, 'operator\s*>', '$`opgt`', 'g')
 
   " drop code in matching (), {}, [], and <> {{{2
   " in addition, the opening paren may instead be start-of-line
@@ -483,6 +489,10 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   let context = substitute(context, '$`ge`', '>=', 'g')
   let context = substitute(context, '$`le`', '<=', 'g')
   let context = substitute(context, '$`sl`', '<<', 'g')
+  let context = substitute(context, '$`oplt`', 'operator<', 'g')
+  let context = substitute(context, '$`opsr`', 'operator>>', 'g')
+  let context = substitute(context, '$`opge`', 'operator>=', 'g')
+  let context = substitute(context, '$`opgt`', 'operator>', 'g')
 
   " simplify `if constexpr` to `if` {{{2
   let context = substitute(context, '\<if\s*constexpr\>', 'if', 'g')
@@ -503,7 +513,7 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   if len(tokens) <= 1
     return tokens
   endif
-  "call s:Debug(tokens)
+  "call s:Debug(context, tokens)
 
   " drop requirement-parameter-list in a requires-expression {{{2
   let requires_idx = index(tokens, 'requires')
@@ -848,10 +858,15 @@ function! s:AdvanceFunctionDecl(tokens, idx) "{{{1
       let maybe_return_type += 1
     elseif i + 2 < n && a:tokens[i] == 'explicit' && a:tokens[i+1] == '('
       let i = s:IndexOfMatchingToken(a:tokens, i+1) + 1
-    elseif i + 2 < n && a:tokens[i] == 'operator' &&
-        \ a:tokens[i+1] =~ '^\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|[<>~!%^&*=|,+-]=\?\)$' &&
-        \ a:tokens[i+2] == '(' && maybe_return_type > 0
-      let i += 2
+    elseif i + 2 < n && a:tokens[i] == 'operator' && maybe_return_type > 0
+      if (a:tokens[i+1] =~ s:operator_fun_token && a:tokens[i+2] == '(')
+        let i += 2
+      elseif (a:tokens[i+1] == '(' && a:tokens[i+2] == ')' && a:tokens[i+3] == '(')
+            \ || (a:tokens[i+1] == '[' && a:tokens[i+2] == ']' && a:tokens[i+3] == '(')
+        let i += 3
+      else
+        call s:Debug("parse error")
+      endif
       break
     elseif a:tokens[i] =~ s:identifier_token
       if a:tokens[i] !~ s:nontype_keyword_token
@@ -1149,12 +1164,12 @@ function! GnuIndent(...) "{{{1
     endif
     call s:Debug("fall through from : rule")
   "elseif function defn/decl {{{2
-  elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*\%(?:\|<=>\|&&\|||\|<<\|>>\|\[\]\|()\|++\|--\|->\|[\[(<>~!%^&*=|,+-]=\?\)\)\s*('
-      \ && current !~ '^\s*\%(and\|x\?or\|not\)\>'
-      \ && tokens[-1] =~ s:identifier_token.'\|>>\|>\|&\|&&\|\*'
+  elseif current =~ '^\s*\%('.s:identifier.'\|operator\s*'.s:operator_fun.'\)\s*('
+      \ && current !~ '^\s*\%(and\|or\|not\|bit_and\|bit_xor\|bit_or\)\>'
+      \ && tokens[-1] =~ s:identifier_token.'\|>>\|>\|&\|&&\|\*\|)'
       \ && tokens[-1] !~ '^\%(else\|do\)$'
-    call s:Info("function definition/declaration")
     let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+    call s:Info("function definition/declaration")
     return indent(plnum) + s:TemplateIndent(tokens)
   "elseif tokens[-1] == '{' {{{2
   elseif tokens[-1] == '{'
