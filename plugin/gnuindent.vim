@@ -51,21 +51,11 @@ function! s:IndexOfMatchingToken(tokens, start) "{{{1
       let depth[depth_idx[a:tokens[i]]] = 1 + (a:tokens[i] == '>>')
     endif
   endif
-  let maybe_shift = []
   "call s:Debug(a:tokens, a:start, depth, direction)
   if direction != 0
     let i += direction
     while i < n && i >= 0
       if a:tokens[i] == '<'
-        while !empty(maybe_shift)
-          "call s:Debug("maybe_shift:", maybe_shift, "depth:", depth)
-          let was_closing = maybe_shift[-1] == depth
-          let maybe_shift = maybe_shift[:-2]
-          if was_closing
-            let depth[0] += 2
-            break
-          endif
-        endwhile
         if direction == -1 && depth[0] + depth[4] == 0
           "it's a less-than operator
         else
@@ -77,7 +67,11 @@ function! s:IndexOfMatchingToken(tokens, start) "{{{1
         let depth[depth_idx[a:tokens[i]]] -= direction
       elseif a:tokens[i] == '>>'
         if direction == -1
-          let maybe_shift += [depth]
+          " try whether we can find matching < tokens
+          if s:IndexOfMatchingToken(a:tokens[:i], -1) >= 0
+            " we have to assume it's not a shift operator
+            let depth[0] += 2
+          endif
         elseif depth[0] >= 2
           let depth[depth_idx[a:tokens[i]]] -= 2
         elseif depth[1:3] == [0, 0, 0]
