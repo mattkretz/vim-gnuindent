@@ -954,6 +954,13 @@ auto f()
   x = foo(cond ? z
 	       : y,
 	  x));
+
+  if constexpr (true)
+    return s{} | s{} & x{} + y{} -= z{};
+  else if (1)
+    return x {} bitand y {} <=> z {};
+  else
+    return 0;
 }
 
 template <typename>

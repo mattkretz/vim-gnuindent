@@ -244,8 +244,9 @@ let s:hex_fractional_constant = '\%('.s:hex_digit_seq.'\?\.'.s:hex_digit_seq.'\|
 let s:identifier = '[a-zA-Z_]\i*'
 let s:identifier_token = '^[a-zA-Z_]\i*$'
 let s:class_key_token = '^\%(class\|struct\|union\)$'
-let s:keyword_token = '^\%(alignas\|alignof\|and\|and_eq\|asm\|auto\|bitand\|bitor\|bool\|break\|case\|catch\|char\|char8_t\|char16_t\|char32_t\|class\|compl\|concept\|const\|consteval\|constexpr\|constinit\|const_cast\|continue\|co_await\|co_return\|co_yield\|decltype\|default\|delete\|do\|double\|dynamic_cast\|else\|enum\|explicit\|export\|extern\|false\|float\|for\|friend\|goto\|if\|inline\|int\|long\|mutable\|namespace\|new\|noexcept\|not\|not_eq\|nullptr\|operator\|or\|or_eq\|private\|protected\|public\|reflexpr\|register\|reinterpret_cast\|requires\|return\|short\|signed\|sizeof\|static\|static_assert\|static_cast\|struct\|switch\|template\|this\|thread_local\|throw\|true\|try\|typedef\|typeid\|typename\|union\|unsigned\|using\|virtual\|void\|volatile\|wchar_t\|while\|xor\|xor_eq\)$'
-let s:nontype_keyword_token = '^\%(alignas\|alignof\|and\|and_eq\|asm\|bitand\|bitor\|break\|case\|catch\|class\|compl\|concept\|const\|consteval\|constexpr\|constinit\|const_cast\|continue\|co_await\|co_return\|co_yield\|decltype\|default\|delete\|do\|dynamic_cast\|else\|enum\|explicit\|export\|extern\|false\|for\|friend\|goto\|if\|inline\|mutable\|namespace\|new\|noexcept\|not\|not_eq\|nullptr\|operator\|or\|or_eq\|private\|protected\|public\|reflexpr\|register\|reinterpret_cast\|requires\|return\|sizeof\|static\|static_assert\|static_cast\|struct\|switch\|template\|this\|thread_local\|throw\|true\|try\|typedef\|typeid\|typename\|union\|using\|virtual\|volatile\|while\|xor\|xor_eq\)$'
+let s:alternate_operators = 'and\|and_eq\|bitand\|bitor\|not\|not_eq\|or\|or_eq\|xor\|xor_eq'
+let s:keyword_token = '^\%('.s:alternate_operators.'\|alignas\|alignof\|asm\|auto\|bool\|break\|case\|catch\|char\|char8_t\|char16_t\|char32_t\|class\|compl\|concept\|const\|consteval\|constexpr\|constinit\|const_cast\|continue\|co_await\|co_return\|co_yield\|decltype\|default\|delete\|do\|double\|dynamic_cast\|else\|enum\|explicit\|export\|extern\|false\|float\|for\|friend\|goto\|if\|inline\|int\|long\|mutable\|namespace\|new\|noexcept\|nullptr\|operator\|private\|protected\|public\|reflexpr\|register\|reinterpret_cast\|requires\|return\|short\|signed\|sizeof\|static\|static_assert\|static_cast\|struct\|switch\|template\|this\|thread_local\|throw\|true\|try\|typedef\|typeid\|typename\|union\|unsigned\|using\|virtual\|void\|volatile\|wchar_t\|while\)$'
+let s:nontype_keyword_token = '^\%('.s:alternate_operators.'\|alignas\|alignof\|asm\|break\|case\|catch\|class\|compl\|concept\|const\|consteval\|constexpr\|constinit\|const_cast\|continue\|co_await\|co_return\|co_yield\|decltype\|default\|delete\|do\|dynamic_cast\|else\|enum\|explicit\|export\|extern\|false\|for\|friend\|goto\|if\|inline\|mutable\|namespace\|new\|noexcept\|nullptr\|operator\|private\|protected\|public\|reflexpr\|register\|reinterpret_cast\|requires\|return\|sizeof\|static\|static_assert\|static_cast\|struct\|switch\|template\|this\|thread_local\|throw\|true\|try\|typedef\|typeid\|typename\|union\|using\|virtual\|volatile\|while\)$'
 let s:decfloat_literal = '\%(\%('.s:fractional_constant.s:exponent_part.'\?\|'
   \ .s:digit_seq.s:exponent_part.'\)[fFlL]\?\)'
 let s:hexfloat_literal = '\%(0[xX]\%('.s:hex_fractional_constant.'\|'.s:hex_digit_seq.'\)'
@@ -522,6 +523,7 @@ function! s:SimplifyAndTokenize(context)
   " 3. don't delete anything inside an open for(...;...;
   " 4. don't remove blocks immediately followed by an opening paren `[]() {}();` should not become `();`
   " 5. don't remove blocks following a requires keyword
+  " 6. don't remove blocks directly preceding a binary operator (likely a ctor call)
   call reverse(tokens)
   let idx1 = index(tokens, ';', 1)
   if idx1 != -1
@@ -550,7 +552,9 @@ function! s:SimplifyAndTokenize(context)
   endif
   let idx3 = index(tokens, '}', 1 + (tokens[0] == ';'))
   while idx3 != -1 && (count(tokens[:idx3], ')') > count(tokens[:idx3], '(')
-      \ || tokens[idx3-1] == '->' || tokens[idx3-1] == ',' || tokens[idx3-1] == '(')
+      \ || tokens[idx3-1] == '->' || tokens[idx3-1] == ',' || tokens[idx3-1] == '('
+      \ || tokens[idx3-1] =~ '[-+*/%|&^.<=>?:!]'
+      \ || tokens[idx3-1] =~ '^\%('.s:alternate_operators.'\)$')
     let idx3 = index(tokens, '}', idx3 + 1)
   endwhile
   let idx3 = -1 - idx3
