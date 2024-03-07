@@ -83,12 +83,40 @@ template <class T>
   void
   f();
 
-using blah = std::integral_constant<
+using blah = xxxxx<
 	       bool, foo
-		       && bar>;
-using blah = std::integral_constant<
+		       && bar,
+	       foo
+		 && bar,
 	       bool, foo &&
-		       bar>;
+		     bar,
+	       foo &&
+	       bar,
+	       bool, foo &
+		     bar,
+	       foo &
+	       bar,
+	       bool, foo +
+		       bar,
+	       foo +
+		 bar,
+	       bool, foo *
+		     bar,
+	       foo *
+	       bar,
+	       bool, foo <=
+		       bar,
+	       foo <=
+		 bar,
+	       bool, foo >=
+		       bar,
+	       foo >=
+		 bar,
+	       bool, foo >>
+		       bar,
+	       foo >>
+		 bar,
+	     >;
 
 where(V([](int i) { return i; }) < 2, V(0))
   .copy_to(mem);
@@ -886,5 +914,78 @@ template <typename _It, typename... _Flags>
 			      : std::to_representation(value_type());
 	    }))
   {}
+
+auto f()
+{
+  auto x = [&]<__detail::_SimdSizeType... _Is>
+	     (__detail::_SimdIndexSequence<_Is...>) {
+    return (... and (__k[_Is] != 0));
+  }(__detail::_MakeSimdIndexSequence<__size>());
+  return [&]<__detail::_SimdSizeType... _Is> [[__gnu__::__always_inline__]]
+	   (__detail::_SimdIndexSequence<_Is...>) {
+    return (... and (__k[_Is] != 0));
+  }(__detail::_MakeSimdIndexSequence<__size>());
+  return foo<(foo_bar<>)>([] (auto __i) {
+	   return 0;
+	 });
+  return [&]<int a,
+	     int b> () {
+    return 0;
+  }();
+  auto foo = [&]<int a,
+		 int b>
+	       [[foo]]
+	       () {
+    return 0;
+  };
+  foo::operator<int,
+		int>();
+  const std::resize_simd_t<__size, _T0>
+    __x01{__private_init,
+	  [&]<_SimdSizeType... _Is, _SimdSizeType... _Js,
+	      _SimdSizeType... _Ks>
+	    [[__gnu__::__always_inline__,
+	      foo]]
+	    (_SimdIndexSequence<_Is...>, _SimdIndexSequence<_Js...>,
+	     _SimdIndexSequence<_Ks...>) {
+	    return x;
+	  }
+  };
+  x = foo(cond ? z
+	       : y,
+	  x));
+}
+
+template <typename>
+  auto
+  iota_v = {};
+
+template <typename>
+  foo<bar>
+  iota_v = {};
+
+template <typename>
+  foo<bar<baz>>
+  iota_v = {};
+
+template <typename>
+  decltype(1)
+  iota_v = {};
+
+template <typename>
+  auto&
+  iota_v = {};
+
+template <typename>
+  auto&&
+  iota_v = {};
+
+template <typename>
+  auto*
+  iota_v = {};
+
+template <typename>
+  auto**
+  iota_v = {};
 
 // vim: noet sw=2 ts=8 tw=80

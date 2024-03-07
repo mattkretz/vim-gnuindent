@@ -256,7 +256,7 @@ let s:escape_sequence = '\\[''"?\\abfnrtv]\|\\\o\{1,3}\|\\x\x\x\?'
 let s:char_literal = s:encoding_prefix_opt.'''\%([^''\\]\|'.s:escape_sequence.'\)'''
 let s:string_literal = s:encoding_prefix_opt.'\%("\%([^"\\]\|\\[uU]\%(\x\{4}\)\{1,2}\|'.s:escape_sequence.'\)*"\|R"\([^(]*\)(.\{-})\1"\)'
 let s:logic_binary_operators = 'and\|or\|&&\|||'
-let s:operators2 = s:logic_binary_operators.'\|->\*\?\|\.\.\.\|\.\*\?\|[()\[\]]\|'.'++\|--\|xor\|not\|<=>\|[|&^!=<>*/%+-]=\|<<\|>>\|::\|[~,:?|&^!=<>*/%+-]'
+let s:operators2 = s:logic_binary_operators.'\|->\*\?\|\.\.\.\|\.\*\?\|[()\[\]]\|'.'++\|--\|xor\|not\|<=>\|[|&^!=<>*/%+-]=\|<<=\?\|>>=\?\|::\|[~,:?|&^!=<>*/%+-]'
 let cxx_tokenize = '\%(\%(sizeof\.\.\.\|'.s:identifier.'\|'.s:float_literal.'\|'.s:int_literal.'\|'.s:char_literal.'\|[;{}]\|'.s:operators2.'\)\@>\zs\)\|\s\+\|\%('.s:char_literal.'\|'.s:string_literal.'\)\@>\zs'
 
 let s:assignment_operators = '\%(<<\|>>\|[/%^&|*+-]\)\?='
@@ -669,9 +669,17 @@ function! s:GetPrevSrcLineMatching(lnum, pattern) "{{{1
   " Return largest linenumber (less than lnum) such that the code between the returned line and lnum matches pattern.
   " If no such linenumber can be found, returns -1.
   " The pattern can either be a regex or a list of tokens.
-  call s:Debug(a:lnum, a:pattern)
   if type(a:pattern) == v:t_list
-    let pattern = '\V'.join(a:pattern, '\.\*')
+    let max = &tw / 2
+    if max < 40
+      max = 40
+    endif
+    if len(a:pattern) > max
+      let pattern = map(a:pattern[0:max], {_, val -> val =~ s:identifier_token ? '\<'.val.'\>' : val})
+      let pattern = '\V'.join(pattern, '\.\*')
+    else
+      let pattern = '\V'.join(a:pattern, '\.\*')
+    endif
   else
     let pattern = a:pattern
   endif
@@ -679,11 +687,13 @@ function! s:GetPrevSrcLineMatching(lnum, pattern) "{{{1
   let context = line
   while context !~ pattern
     if lnum <= 1
+      call s:Debug("failure searching for", a:lnum, pattern)
       return -1
     endif
     let [lnum, line] = s:GetPrevSrcLine(lnum)
     let context = line.context
   endwhile
+  call s:Debug("found", lnum, "for", a:lnum, pattern)
   return lnum
 endfunction
 
@@ -765,9 +775,11 @@ function! s:AdvanceNestedNameSpecifier(tokens, idx) "{{{1
           return i
         endif
         let i = 1 + j
+      else
+        break
       endif
     else
-      return i
+      break
     endif
   endwhile
   return i
@@ -964,15 +976,84 @@ function! s:AdvanceAttributeSpecifierSeq(tokens, idx) "{{{1
   return a:idx
 endfunction
 
+function! s:WalkBackLambda(tokens, idx)
+  let i = a:idx
+  if i < 0
+    let i = len(a:tokens) + i
+  endif
+  " FIXME: requires-clause_opt
+  " FIXME: trailing-return-type_opt
+  while i > 1 && a:tokens[i] == ']' && a:tokens[i - 1] == ']'
+    " attribute-specifier-seq_opt
+    let i = s:IndexOfMatchingToken(a:tokens, i) - 1
+  endwhile
+  " noexcept-specifier_opt FIXME: conditional noexcept
+  if i > 0 && a:tokens[i] == 'noexcept'
+    let i -= 1
+  endif
+  " lambda-specifier-seq
+  while i > 0 && a:tokens[i] =~ '^\%(constexpr\|consteval\|mutable\|static\)$'
+    let i -= 1
+  endwhile
+  if i > 0 && a:tokens[i] == ')'
+    " jump over ( parameter-declaration-clause )
+    let i = s:IndexOfMatchingToken(a:tokens, i) - 1
+  endif
+  while i > 1 && a:tokens[i] == ']' && a:tokens[i - 1] == ']'
+    " attribute-specifier-seq_opt
+    let i = s:IndexOfMatchingToken(a:tokens, i) - 1
+  endwhile
+  if i > 0 && a:tokens[i] == '>'
+    " jump over template-parameter-list
+    let i = s:IndexOfMatchingToken(a:tokens, i) - 1
+  endif
+  if i > 0 && a:tokens[i] == ']'
+    let i = s:IndexOfMatchingToken(a:tokens, i)
+    call s:Debug(a:tokens, a:idx, "->", i)
+    return i
+  endif
+  return a:idx
+endfunction
+
+function! s:IsIndentAfterBlock(tokens, isFunDecl, current)
+  " precondition: a:tokens[-1] == '}'
+  " 1. false if a ? or : operator follows - why, though?
+  " 2. true after a compound-statement of a function-body
+  " 3. false after a , (initializer list, argument list)
+  " 4. false after a requirement-body
+  " 5. false after compound-statement of a lambda-expression
+  if a:current =~ '^\s*[?:]'
+    return 0
+  elseif a:isFunDecl
+    return 1
+  endif
+  let i = s:IndexOfMatchingToken(a:tokens, -1) " => a:tokens[i] == '{'
+  if i > 0 && a:tokens[i - 1] != ',' && a:tokens[i - 1] != 'requires'
+    return s:WalkBackLambda(a:tokens, i - 1) == i - 1
+  elseif i == 0
+    return 1
+  endif
+  return 0
+endfunction
+
 function! s:AlignedIndent(base_indent_type, base_indent, indent_offset, tokens, ctokens, align_to_identifier_before_opening_token) "{{{1
-  if a:indent_offset == 0
-    let indent_offset = shiftwidth() * ((
-        \   a:ctokens[0] =~ s:operators2_token &&
-        \   a:ctokens[0] !~ '^[\[({})\]]$'
-        \ ) || (
-        \   a:tokens[-1] =~ s:operators2_token &&
-        \   a:tokens[-1] !~ '^\%(>>\|[\[\]()<>,]\)$'
-        \ ))
+  if a:indent_offset == 0 && a:ctokens[0] =~ s:operators2_token && a:ctokens[0] !~ '^[\[({})\]]$'
+    call s:Debug("++indent_offset because ctokens[0] =", a:ctokens[0])
+    let indent_offset = shiftwidth()
+  elseif a:indent_offset == 0 && a:tokens[-1] =~ s:operators2_token && a:tokens[-1] !~ '^[()<>\[\],]$'
+    if a:tokens[-1] == '>>' && s:IndexOfMatchingToken(a:tokens, -1) >= 0
+      let indent_offset = a:indent_offset
+    elseif index(['&', '&&', '*'], a:tokens[-1]) >= 0
+      " If the preceding token is & && * we might be looking at a type, not a
+      " binary operator. That's hard to determine without a full AST. However,
+      " GNU style wants binary operators at the start of the new line, not the
+      " end of the preceding line. So let's take that as a heuristic.
+      call s:Info("assuming", a:tokens[-2:] + a:ctokens[0:0], "is not a binary operation. Place '".a:tokens[-1]."' on the same line as '".a:ctokens[0]."' if that's wrong.")
+      let indent_offset = a:indent_offset
+    else
+      call s:Debug("++indent_offset because tokens[-1] =", a:tokens[-1])
+      let indent_offset = shiftwidth()
+    endif
   else
     let indent_offset = a:indent_offset
   endif
@@ -1092,13 +1173,12 @@ function! GnuIndent(...) "{{{1
     elseif tokens[-1] !~ '^[,(]$'
       " not a condblock
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      call s:Info("align block indent to preceding statement", tokens[-3:])
+      call s:Info("align block indent to preceding statement", plnum, tokens[0:4])
       return indent(plnum) + s:TemplateIndent(tokens)
     endif
     call s:Debug("fall through from block indent section")
   "indent after block {{{2
-  elseif tokens[-1] == '}' && (tokens[s:IndexOfMatchingToken(tokens, -1) - 1] !~ ',\|requires'
-        \ || funDeclEnd > 0) && current !~ '^\s*[?:]'
+  elseif tokens[-1] == '}' && s:IsIndentAfterBlock(tokens, funDeclEnd > 0, current)
     let plnum = s:GetPrevSrcLineMatching(lnum, '\V\^\s\*'.join(tokens, '\.\*'))
     call s:Info("indent after block", plnum)
     return indent(plnum) + shiftwidth() * ((current =~ '^\s*->') - (current =~ '^\s*}') - is_access_specifier)
@@ -1108,7 +1188,7 @@ function! GnuIndent(...) "{{{1
     call s:Info("use cindent because of distant context")
     return cindent('.')
   "elseif tokens[-2:] == ['{', '}'] && tokens[-3] =~ 'if\|else\|for\|while\|do' {{{2
-  elseif tokens[-2:] == ['{', '}'] && tokens[-3] =~ 'if\|else\|for\|while\|do'
+  elseif len(tokens) >= 3 && tokens[-2:] == ['{', '}'] && tokens[-3] =~ 'if\|else\|for\|while\|do'
     call s:Info("indent after condblock")
     let plnum = search('^\s*}', 'bnWz', 0, 20)
     return indent(plnum) - shiftwidth()
@@ -1165,18 +1245,93 @@ function! GnuIndent(...) "{{{1
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens[-1:])
       return indent(plnum)
     else
-      " first indent inside a new {} block (ignoring labels)
-      let plnum = s:GetPrevSrcLineMatching(lnum, tokens[-1:])
-      let previous = s:GetSrcLine(plnum)
-      let ptok = s:CxxTokenize(previous)
-      call s:Debug("ptok: ", ptok)
-      if previous =~ '^\s*{' || (ptok[0] !~ ':' &&
-          \ count(ptok, '(') == count(ptok, ')') &&
-          \ count(ptok, '[') == count(ptok, ']') &&
-          \ count(ptok, '<') == count(ptok, '>'))
-          "\ count(ptok, '{') - 1 == count(ptok, '}') &&
-        call s:Info("indent inside a new {} block:")
-        return indent(plnum) + shiftwidth() * (1 - is_access_specifier)
+      let lambda_idx = s:WalkBackLambda(tokens, -2)
+      if lambda_idx >= 0
+        " This is a bit tricky:
+        " 1.
+        " a) auto x = []() {
+        "      //
+        "    }
+        " b) foo([]() {
+        "      //
+        "    }
+        " c) foo(a, b, c, []() {
+        "      //
+        "    }
+        " d) return [] {
+        "      //
+        "    }
+        " 2.
+        " a) auto x = foo([] {
+        "               //
+        "             }
+        " b) foo(bar([] {
+        "          //
+        " c)     }, [] {
+        "          //
+        "        },
+        " d)     [] {
+        "          //
+        "        }
+        " 3.
+        " a) auto x = 1 + [] {
+        "                   //
+        "                 }
+        " b) x += [] {
+        "           //
+        "         }
+        "    foo(
+        "      x,
+        " c)   [] {
+        "        //
+        " d)   }, [] {
+        "        //
+        "      },
+        " e)   [] {
+        "        //
+        "      }
+        " f) [] {
+        "      //
+        "    }();
+        " 
+        let plnum = s:GetPrevSrcLineMatching(lnum, tokens[lambda_idx:])
+        if lambda_idx == 0
+          " 3f)
+          call s:Info("align one sw behind lambda-introducer")
+          return indent(plnum) + shiftwidth()
+        endif
+        let before_lambda = tokens[lambda_idx - 1]
+        if before_lambda == 'return' || before_lambda == '='
+          " 1a 1d
+          let first = s:AdvanceTemplateHead(tokens, 0)
+          if tokens[first] == 'else'
+            let first += 1
+          endif
+          let plnum = s:GetPrevSrcLineMatching(lnum, tokens[first:-1])
+          call s:Info("align one sw behind first token:", tokens[first])
+          return indent(plnum) + shiftwidth()
+        endif
+        let alignment = s:IndentForAlignment(plnum, '^\s*\zs.*\ze', tokens[lambda_idx:])
+        if (alignment == indent(plnum))
+          " 2d 3c 3e (3f)
+          call s:Info("align one sw behind lambda-introducer")
+          return alignment + shiftwidth()
+        endif
+        " the remaining cases are handled below
+      else
+        " first indent inside a new {} block (ignoring labels)
+        let plnum = s:GetPrevSrcLineMatching(lnum, tokens[-1:])
+        let previous = s:GetSrcLine(plnum)
+        let ptok = s:CxxTokenize(previous)
+        call s:Debug("ptok: ", ptok)
+        if previous =~ '^\s*{' || (ptok[0] !~ ':' &&
+            \ count(ptok, '(') == count(ptok, ')') &&
+            \ count(ptok, '[') == count(ptok, ']') &&
+            \ count(ptok, '<') == count(ptok, '>'))
+            "\ count(ptok, '{') - 1 == count(ptok, '}') &&
+          call s:Info("indent inside a new {} block:")
+          return indent(plnum) + shiftwidth() * (1 - is_access_specifier)
+        endif
       endif
       "call s:Debug("fall through to align_to_identifier_before_opening_token", plnum, previous, ptok)
     endif
@@ -1212,11 +1367,17 @@ function! GnuIndent(...) "{{{1
       let tokens2 = GetCxxContextTokens(plnum-1, 5)
     else
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
-      let tokens2 = GetCxxContextTokens(plnum-1, 5,
-          \ substitute(s:GetSrcLine(plnum), '^.*\zs'.tokens[0].'.*$', '', ''))
+      let src = s:GetSrcLine(plnum)
+      let pattern = '^.*\zs\V'.tokens[0]
+      let i = 1
+      while i < len(tokens) && src =~ pattern.'\.\*'.tokens[i]
+        let pattern .= '\.\*'.tokens[i]
+        let i += 1
+      endwhile
+      let tokens2 = GetCxxContextTokens(plnum-1, 5, substitute(src, pattern, '', ''))
     endif
     if count(tokens2, '(') == count(tokens2, ')')
-      let plnum = s:GetPrevSrcLineMatching(plnum, tokens2)
+      let plnum = s:GetPrevSrcLineMatching(plnum + 1, tokens2)
       call s:Info("align to indent of initializer list:", plnum, tokens2)
       return indent(plnum)
     elseif s:GetSrcLine(plnum) =~ '{\s*'.tokens[0]
@@ -1233,8 +1394,9 @@ function! GnuIndent(...) "{{{1
     let line = substitute(line, s:string_literal.'[^"]*$', '', '')
     let line = substitute(line, '\t', repeat('.', &ts), 'g')
     return strlen(line)
-  elseif tokens[-1] == ',' && tokens[-2] =~ '^\%(>>\|[>)}]\|'.s:identifier.'\)$' && index(tokens, ':') != -1 "{{{2
-    " constructor initializer list? or class inheritance list?
+  " constructor initializer list? or class inheritance list? {{{2
+  elseif tokens[-1] == ',' && tokens[-2] =~ '^\%(>>\|[>)}]\|'.s:identifier.'\)$' && index(tokens, ':') != -1
+        \ && count(tokens, ':') > count(tokens, '?')
     let t = s:RemoveMatchingAngleBrackets(tokens)
     let i = len(t) - 1
     while i > 1 && t[i] == ','
@@ -1256,8 +1418,8 @@ function! GnuIndent(...) "{{{1
     endwhile
     if i > 0 && t[i] == ':'
       " yes
-      call s:Info("align to ctor initializer list / class inheritance list")
       let plnum = s:GetPrevSrcLineMatching(lnum, t[i:])
+      call s:Info("align to ctor initializer list / class inheritance list", plnum, t[i:])
       return s:IndentForAlignment(plnum, '^\s*\zs.*:\s*\ze', t[i+1:])
     endif
   "elseif tokens[-1] =~ '^\%(inline\|static\|constexpr\|consteval\|explicit\|extern\|const\)$' {{{2
@@ -1266,7 +1428,7 @@ function! GnuIndent(...) "{{{1
     let [plnum, previous] = s:GetPrevSrcLine(lnum)
     return indent(plnum)
   " elseif s:LastTokensIsAttribute(tokens) {{{2
-  elseif s:LastTokensIsAttribute(tokens)
+  elseif s:LastTokensIsAttribute(tokens) && s:WalkBackLambda(tokens, -1) == -1
     call s:Info("indent like previous line after attribute")
     let [plnum, previous] = s:GetPrevSrcLine(lnum)
     return indent(plnum)
@@ -1330,12 +1492,20 @@ function! GnuIndent(...) "{{{1
   "alignment inside argument & initializer lists {{{2
   elseif tokens[-1] == ','
       \ || (ctokens[0] =~ s:operators2_token && ctokens[0] != '(')
-      \ || (tokens[-1] =~ s:operators2_token && (tokens[-1] !~ '^[)>]>\?$' ||
+      \ || (tokens[-1] =~ s:operators2_token && (tokens[-1] !~ '^\%(]\|)\|>>\?\)$' ||
         \ s:IndexOfMatchingToken(tokens, -1) == -1))
-    "call s:Debug("consider alignment inside argument list")
     let i = s:IndexOfMatchingToken(tokens, len(tokens))
+    call s:Debug("consider alignment inside argument list; last opening token:", i)
     while i > 0 && tokens[i] == '<' "{{{
-      if tokens[i-1] !~ s:identifier_token
+      " determine whether this '<' token is a less-than operator or an opening
+      " bracket of a template parameter/argument list
+      " 1. if the preceding token is not an identifier we assume a less-than
+      "    operator...
+      " 2. ... except if it's an ']', in which case we might be looking at the
+      "    template-parameter-list after a lambda-introducer. But it could
+      "    also be e.g `data[0] < 0`, where it's a less-than operator
+      " 3. ... or except if it's e.g. operator+<T>, in which case tokens[i-2] == 'operator'
+      if tokens[i-1] !~ s:identifier_token && tokens[i-1] != ']' && !(i >= 2 && tokens[i-2] == 'operator')
         " tokens[i] is a less-than operator
         let i = s:IndexOfMatchingToken(tokens[:i-1], i)
       else
@@ -1459,6 +1629,36 @@ function! GnuIndent(...) "{{{1
       endif
     endif "}}}
   endif
+  let lambda_idx = s:WalkBackLambda(tokens, -1)
+  if lambda_idx != -1
+    let i = 0
+    let moretokens = []
+    while i < len(ctokens) && ctokens[i] != '{'
+      let j = s:IndexOfMatchingToken(ctokens, i)
+      if j == -1
+        if ctokens[i] == '('
+          let moretokens = ['(', ')']
+          break
+        elseif ctokens[i] == '[' && ctokens[i+1] == '['
+          let moretokens = ['[', '[', ']', ']']
+          break
+        elseif ctokens[i] == '<'
+          let moretokens = ['<', '>']
+          break
+        endif
+        let i += 1
+      else
+        let i = j + 1
+      endif
+    endwhile
+    if lambda_idx == s:WalkBackLambda(tokens + slice(ctokens, 0, i) + moretokens, -1)
+      let plnum = s:GetPrevSrcLineMatching(lnum, tokens[lambda_idx:])
+      call s:Info("indenting lambda-expression before its compound-statement")
+      return s:IndentForAlignment(plnum, '^\s*\zs.*\ze', tokens[lambda_idx:]) + shiftwidth()
+    else
+      call s:Debug("not a lambda-expression", i, ctokens)
+    endif
+  endif
   "if tokens[-1] =~ '^[{(<]$' {{{2
   if ctokens[0] == '(' && tokens[-1] != '{'
     let align_to_identifier_before_opening_token = [1, 0]
@@ -1506,7 +1706,7 @@ function! GnuIndent(...) "{{{1
             let i -= 1
             break
           else
-            call s:Debug("jumping back from , over opening token", token[nexti+1], "to", token[nexti])
+            call s:Debug("jumping back from , over opening token", tokens[nexti+1], "to", tokens[nexti])
             let i = nexti
           endif
         elseif tokens[i - 1] =~ '^[)>}\]]$'
