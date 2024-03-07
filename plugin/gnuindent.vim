@@ -331,9 +331,38 @@ function! s:SimplifyContext(context, to_keep, ...) "{{{1
   return context
 endfunction
 
+function! s:WalkUpForMoreContext(nextline) "{{{1
+  let nextline = a:nextline
+  let s = getline(nextline)
+  let nextline -= 1
+  while getline(nextline)[-1:] == '\'
+    let s = getline(nextline)[:-2] . s
+    let nextline -= 1
+  endwhile
+  " ignore preprocessor directives and labels
+  if s =~ '^\s*#' || s =~ '^\s*\i\+\s*::\@!'
+    if s =~ '^\s*#\s*el\%(se\|if\)\>'
+      " walk up beyond the #if that started it
+      let depth = 1
+      while nextline > 0 && depth > 0
+        let s = getline(nextline)
+        let nextline -= 1
+        if s =~ '^\s*#\s*if\%(n\?def\)\?\>'
+          let depth -= 1
+        elseif s =~ '^\s*#\s*endif\>'
+          let depth += 1
+        endif
+      endwhile
+    endif
+    return s:WalkUpForMoreContext(nextline)
+  endif
+  " trim whitespace and drop // comments
+  return [nextline, substitute(s, '^\s*\(.\{-}\)\s*\(//.*\)\?$', '\1', '')]
+endfunction
+
 function! GetCxxContextTokens(from, n, ...) "{{{1
   " Returns a list of tokens preceding and including line a:from.
-  " Considers at most a:n lines but at least a:n * &textwidth characters (excluding preprocessor directives and comments).
+  " Considers at least a:n lines / a:n * &textwidth characters (excluding preprocessor directives and comments).
   " The context is increased if it doesn't suffice to determine indenting width:
   " ['}'] does not suffice and requires more context to see what precedes the matching opening brace.
   "
@@ -347,64 +376,35 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   let context = join(a:000)
   let nextline = a:from
   let n = 0
-  let maybe_macro = getline(nextline)[-1:] == '\'
-  while nextline > 0 && (n < a:n || strlen(context) < a:n * &tw || getline(nextline) !~ '^\s*$') "{{{2
-    let s = getline(nextline)
+  if getline(nextline)[-1:] == '\'
+    let s = getline(nextline)[:-2]
     let nextline -= 1
     while getline(nextline)[-1:] == '\'
       let s = getline(nextline)[:-2] . s
       let nextline -= 1
     endwhile
-    " ignore preprocessor directives and labels
-    if s =~ '^\s*#' || s =~ '^\s*\i\+\s*::\@!'
-      if s =~ '^\s*#\s*el\%(se\|if\)\>'
-        " walk up beyond the #if that started it
-        let depth = 1
-        while nextline > 0 && depth > 0
-          let s = getline(nextline)
-          let nextline -= 1
-          if s =~ '^\s*#\s*if\%(n\?def\)\?\>'
-            let depth -= 1
-          elseif s =~ '^\s*#\s*endif\>'
-            let depth += 1
-          endif
-        endwhile
-      elseif maybe_macro && s =~ '^\s*#\s*define\s'
-        if s[-1:] == '\'
-          let s = s[:-2]
-        endif
-        let context = s . ' ' . context
-        break
-      endif
-      let maybe_macro = 0
-      continue
+    if s =~ '^\s*#\s*define\s'
+      " that's it, no more context needed
+      return s:SimplifyAndTokenize(s)
+    else
+      let n = 1
     endif
-    let maybe_macro = 0
-    " trim whitespace and drop // comments
-    let s = substitute(s, '^\s*\(.\{-}\)\s*\(//.*\)\?$', '\1', '')
-    if empty(s)
-      continue
+  endif
+
+  while nextline > 0 && (n < a:n || strlen(context) < a:n * &tw || getline(nextline) !~ '^\s*$') "{{{2
+    let [nextline, s] = s:WalkUpForMoreContext(nextline)
+    if !empty(s)
+      let n += 1
+      let context = s . ' ' . context
     endif
-    let n += 1
-    let context = s . ' ' . context
   endwhile
+  "call s:Debug("done after line", nextline, context)
 
   " get more context to see what the last closing brace belongs to {{{2
   if count(context, '{') < count(context, '}')
     let need_more = 1
     while nextline > 0 && need_more
-      let s = getline(nextline)
-      let nextline -= 1
-      while getline(nextline)[-1:] == '\'
-        let s = getline(nextline)[:-2] . s
-        let nextline -= 1
-      endwhile
-      " ignore preprocessor directives and labels
-      if s =~ '^\s*#' || s =~ '^\s*\i\+\s*::\@!'
-        continue
-      endif
-      " trim whitespace and drop // comments
-      let s = substitute(s, '^\s*\(.\{-}\)\s*\(//.*\)\?$', '\1', '')
+      let [nextline, s] = s:WalkUpForMoreContext(nextline)
       if empty(s)
         if need_more > 1
           break
@@ -415,26 +415,22 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
       let context = s . ' ' . context
       let need_more += (count(context, '{') >= count(context, '}'))
     endwhile
+    "call s:Debug("done after line", nextline, context)
   endif
 
   " go back beyond the start of an intializer list {{{2
   while nextline > 0 && count(context, ';') == 0 && count(context, '{') <= count(context, '}')
-    let s = getline(nextline)
-    let nextline -= 1
-    while getline(nextline)[-1:] == '\'
-      let s = getline(nextline)[:-2] . s
-      let nextline -= 1
-    endwhile
-    " ignore preprocessor directives and labels
-    if s =~ '^\s*#' || s =~ '^\s*\i\+\s*::\@!'
-      continue
-    endif
-    " trim whitespace and drop // comments
-    let s = substitute(s, '^\s*\(.\{-}\)\s*\(//.*\)\?$', '\1', '')
+    let [nextline, s] = s:WalkUpForMoreContext(nextline)
     if !empty(s)
       let context = s . ' ' . context
     endif
   endwhile
+  "call s:Debug("done after line", nextline, context)
+  return s:SimplifyAndTokenize(context)
+endfunction
+
+function! s:SimplifyAndTokenize(context)
+  let context = a:context
 
   " drop /* */ comments {{{2
   let context = substitute(context, '/\*.\{-}\*/', ' ', 'g')
@@ -501,14 +497,6 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
 
   " simplify `if constexpr` to `if` {{{2
   let context = substitute(context, '\<if\s*constexpr\>', 'if', 'g')
-
-  " remove matching brackets, because they are a headache for GetPrevSrcLineMatching {{{2
-  " (disabled, seems like I sprinkled enough \V so that it's not a problem anymore) {{{2
-" let pattern = '\[[^\[\]]*\]'
-" while context =~ pattern
-"   let context = substitute(context, pattern, ' ', 'g')
-"   "call s:Debug(context)
-" endwhile
 
   " simplify conditional expressions `a?b:c` to `a c` {{{2
   let context = substitute(context, '\s*?\%([^?:]\|::\)*::\@!\s*', ' ?: ', 'g')
