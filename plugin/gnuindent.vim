@@ -1593,7 +1593,7 @@ function! GnuIndent(...) "{{{1
       endif
     endif "}}}
     if plnum >= 0 "{{{
-      let previous = s:GetSrcLine(plnum)
+      let previous = s:GetSrcLineDropContinuations(plnum)
       let first = 0
       let last = -1
       if tok1[-1] == '<'

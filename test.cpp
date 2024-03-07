@@ -995,4 +995,12 @@ template <typename>
   auto**
   iota_v = {};
 
+#define Foo                                                               \
+  template <class _Tp>                                                    \
+    requires xxxx<decltype(declval<value_type>() __op declval<_Tp>()),    \
+		  value_type>                                             \
+    int                                                                   \
+    foo()                                                                 \
+    {}
+
 // vim: noet sw=2 ts=8 tw=80
