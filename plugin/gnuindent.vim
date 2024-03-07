@@ -308,16 +308,20 @@ function! s:SimplifyContext(context, to_keep, ...) "{{{1
   let m = matchstrpos(context, pattern)
   "call s:Debug("            next:", context, m)
   while m[1] != -1
+    "call s:Debug("matched:", m)
+    let left = slice(context, 0, m[1])
     if       count(m[0], '(') != count(m[0], ')')
         \ || count(m[0], '{') != count(m[0], '}')
         \ || count(m[0], '[') != count(m[0], ']')
         \ || m[2] - m[1] < 2
         \ || m[0] =~ '^[ '.a:to_keep.']*$'
+        \ || (a:0 == 2 && a:2 == '>' && context[m[2]] == '>' && count(left, '<') <= count(left, '>'))
+      " The above special-cases <...> where ...<...>>... might otherwise be
+      " interpreted as two closing angle brackets instead of a shift operator
       let m = matchstrpos(context, pattern, m[2])
       "call s:Debug("   skipped. next:", context, m)
     else
-      let left = context[:m[1]][:-2]
-      let right = context[m[2]:]
+      let right = slice(context, m[2])
       let context = left.substitute(m[0], '[^'.a:to_keep.']\+', ' ', 'g').right
       let m = matchstrpos(context, pattern)
       "call s:Debug("simplified. next:", context, m)
@@ -477,7 +481,7 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
               \ '\)\+)'
   let context = s:SimplifyContext(context, '{}()', pattern)
   let context = s:SimplifyContext(context, '\[\]', '\[', '\]')
-  let context = substitute(context, '<\zs[^<>()]\+\ze>', '', 'g')
+  let context = substitute(context, '<\zs[^<>()]\+\ze>\%($\|[^>]\)', '', 'g')
   let context = s:SimplifyContext(context, '<>', '<', '>')
 
   " get back the compare and shift operators {{{2
