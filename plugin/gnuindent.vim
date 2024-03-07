@@ -161,12 +161,13 @@ function! s:IndentForAlignment(lnum, pattern, ...) "{{{1
   "call s:Debug("'".s."'")
   let p = a:pattern
   if a:0 == 1
+    let tok2 = map(copy(a:1), {_, val -> val =~ s:identifier_token ? '\<'.val.'\>' : val})
     let i = 0
-    while len(a:1) > i && s =~ p.'\V'.join(a:1[:i], '\.\*')
+    while len(tok2) > i && s =~ p.'\V'.join(tok2[:i], '\.\*')
       let i += 1
     endwhile
     if i > 0
-      let p .= '\V'.join(a:1[:i-1], '\.\*')
+      let p .= '\V'.join(tok2[:i-1], '\.\*')
     endif
   endif
   return indent(a:lnum) + strlen(matchstr(s, p))
