@@ -980,16 +980,20 @@ function! s:AdvanceAttributeSpecifierSeq(tokens, idx) "{{{1
   return a:idx
 endfunction
 
-function! s:WalkBackLambda(tokens, idx)
+function! s:WalkBackLambda(tokens, idx) "{{{1
   let i = a:idx
   if i < 0
     let i = len(a:tokens) + i
   endif
   " FIXME: requires-clause_opt
   " FIXME: trailing-return-type_opt
-  while i > 1 && a:tokens[i] == ']' && a:tokens[i - 1] == ']'
+  while (i > 1 && a:tokens[i] == ']' && a:tokens[i - 1] == ']') || (i > 0 && a:tokens[i] == '_GLIBCXX_SIMD_ALWAYS_INLINE_LAMBDA')
     " attribute-specifier-seq_opt
-    let i = s:IndexOfMatchingToken(a:tokens, i) - 1
+    if (a:tokens[i] == ']')
+      let i = s:IndexOfMatchingToken(a:tokens, i) - 1
+    else
+      let i -= 1
+    endif
   endwhile
   " noexcept-specifier_opt FIXME: conditional noexcept
   if i > 0 && a:tokens[i] == 'noexcept'
