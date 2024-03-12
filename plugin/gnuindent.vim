@@ -1436,7 +1436,7 @@ function! GnuIndent(...) "{{{1
     let [plnum, previous] = s:GetPrevSrcLine(lnum)
     return indent(plnum)
   " elseif s:LastTokensIsAttribute(tokens) {{{2
-  elseif s:LastTokensIsAttribute(tokens) && s:WalkBackLambda(tokens, -1) == -1
+  elseif s:LastTokensIsAttribute(tokens) && s:WalkBackLambda(tokens, -1) == -1 && index(tokens, 'if') == -1
     call s:Info("indent like previous line after attribute")
     let [plnum, previous] = s:GetPrevSrcLine(lnum)
     return indent(plnum)

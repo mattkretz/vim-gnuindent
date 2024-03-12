@@ -961,6 +961,11 @@ auto f()
     return x {} bitand y {} <=> z {};
   else
     return 0;
+
+  if (1) [[unlikely]]
+    return 1;
+  else if (2) [[likely]]
+    return 2;
 }
 
 template <typename>
