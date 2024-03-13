@@ -424,7 +424,7 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   return s:SimplifyAndTokenize(context)
 endfunction
 
-function! s:SimplifyAndTokenize(context)
+function! s:SimplifyAndTokenize(context) "{{{1
   let context = a:context
 
   " drop /* */ comments {{{2
@@ -637,7 +637,8 @@ endfunction
 function! s:RemoveControlTokens(tokens) "{{{1
   " remove leading if/else/for/while if there's more after it
   let paren_idx = -1
-  if a:tokens[0] == 'else' && len(a:tokens) > 1
+  let n = len(a:tokens)
+  if a:tokens[0] == 'else' && n > 1
     if a:tokens[1] != 'if'
       return a:tokens[1:]
     else
@@ -646,9 +647,13 @@ function! s:RemoveControlTokens(tokens) "{{{1
   elseif a:tokens[0] =~ '^\%(if\|for\|while\)$'
     let paren_idx = 1
   endif
-  if paren_idx > 0 && len(a:tokens) > paren_idx && a:tokens[paren_idx] == '('
+  if paren_idx > 0 && n > paren_idx && a:tokens[paren_idx] == '('
     let closing_idx = s:IndexOfMatchingToken(a:tokens, paren_idx)
-    if closing_idx != -1 && closing_idx + 1 < len(a:tokens)
+    if closing_idx != -1 && closing_idx + 4 < n
+          \ && a:tokens[closing_idx + 1] == '[' && a:tokens[closing_idx + 2] == '['
+      let closing_idx = s:IndexOfMatchingToken(a:tokens, closing_idx + 1)
+    endif
+    if closing_idx != -1 && closing_idx + 1 < n
       return a:tokens[closing_idx+1:]
     endif
   endif
@@ -1305,24 +1310,22 @@ function! GnuIndent(...) "{{{1
         let plnum = s:GetPrevSrcLineMatching(lnum, tokens[lambda_idx:])
         if lambda_idx == 0
           " 3f)
-          call s:Info("align one sw behind lambda-introducer")
+          call s:Info("align one sw behind lambda-introducer (3f)")
           return indent(plnum) + shiftwidth()
         endif
         let before_lambda = tokens[lambda_idx - 1]
         if before_lambda == 'return' || before_lambda == '='
           " 1a 1d
           let first = s:AdvanceTemplateHead(tokens, 0)
-          if tokens[first] == 'else'
-            let first += 1
-          endif
-          let plnum = s:GetPrevSrcLineMatching(lnum, tokens[first:-1])
-          call s:Info("align one sw behind first token:", tokens[first])
+          let tokens = s:RemoveControlTokens(tokens[first:])
+          let plnum = s:GetPrevSrcLineMatching(lnum, tokens)
+          call s:Info("align one sw behind first token:", tokens[0])
           return indent(plnum) + shiftwidth()
         endif
         let alignment = s:IndentForAlignment(plnum, '^\s*\zs.*\ze', tokens[lambda_idx:])
         if (alignment == indent(plnum))
           " 2d 3c 3e (3f)
-          call s:Info("align one sw behind lambda-introducer")
+          call s:Info("align one sw behind lambda-introducer (2d 3c 3e)")
           return alignment + shiftwidth()
         endif
         " the remaining cases are handled below

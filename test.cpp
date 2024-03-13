@@ -932,6 +932,22 @@ auto f()
 	     int b> () {
     return 0;
   }();
+  if (foo())
+    return []() {
+      return 0;
+    }();
+  else if (foo()) [[likely]]
+    return []() {
+      return 0;
+    }();
+  else
+    return []() {
+      return 0;
+    }();
+  while (true)
+    x = [] {
+      return 0;
+    }();
   auto foo = [&]<int a,
 		 int b>
 	       [[foo]]
