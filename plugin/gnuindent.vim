@@ -1030,12 +1030,12 @@ endfunction
 
 function! s:IsIndentAfterBlock(tokens, isFunDecl, current)
   " precondition: a:tokens[-1] == '}'
-  " 1. false if a ? or : operator follows - why, though?
+  " 1. false if an operator (that's not the start of an attribute) follows
   " 2. true after a compound-statement of a function-body
   " 3. false after a , (initializer list, argument list)
   " 4. false after a requirement-body
   " 5. false after compound-statement of a lambda-expression
-  if a:current =~ '^\s*[?:]'
+  if a:current =~ '^\s*\%('.s:operators2.'\)' && a:current !~ '^\s*[['
     return 0
   elseif a:isFunDecl
     return 1

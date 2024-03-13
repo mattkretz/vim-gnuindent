@@ -972,9 +972,11 @@ auto f()
 	  x));
 
   if constexpr (true)
-    return s{} | s{} & x{} + y{} -= z{};
+    return s{} | s{} & x{} + y{} -= z{}
+	     + 1;
   else if (1)
-    return x {} bitand y {} <=> z {};
+    return x {} bitand y {} <=> z {}
+	     + 1;
   else
     return 0;
 
