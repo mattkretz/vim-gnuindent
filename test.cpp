@@ -50,11 +50,9 @@ static_assert(x < 2,
 	      "huh?");
 static_assert(x < 2,
 	      foo<1>());
-// The following is just not worth the effort. '<' is ambiguous and it's
-// unreasonable to disambiguate.
 static_assert(x < 2,
-		  "it's"
-		  "complicated");
+	      "it's"
+	      "complicated");
 
 void
 f();
@@ -1025,5 +1023,8 @@ template <typename>
     int                                                                   \
     foo()                                                                 \
     {}
+
+f(fd.exponent < 10 || fd.mantissa != 1
+    || fd.exponent/64 < (int)std::size(pow10_adjustment_tab));
 
 // vim: noet sw=2 ts=8 tw=80

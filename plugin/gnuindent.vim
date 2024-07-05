@@ -1506,8 +1506,8 @@ function! GnuIndent(...) "{{{1
       \ || (tokens[-1] =~ s:operators2_token && (tokens[-1] !~ '^\%(]\|)\|>>\?\)$' ||
         \ s:IndexOfMatchingToken(tokens, -1) == -1))
     let i = s:IndexOfMatchingToken(tokens, len(tokens))
-    call s:Debug("consider alignment inside argument list; last opening token:", i)
-    while i > 0 && tokens[i] == '<' "{{{
+    call s:Debug("consider alignment inside argument list; last opening token:", i, tokens[i])
+    while i > 0 && tokens[i] == '<' && i < len(tokens)-1 "{{{
       " determine whether this '<' token is a less-than operator or an opening
       " bracket of a template parameter/argument list
       " 1. if the preceding token is not an identifier we assume a less-than
@@ -1518,6 +1518,10 @@ function! GnuIndent(...) "{{{1
       " 3. ... or except if it's e.g. operator+<T>, in which case tokens[i-2] == 'operator'
       if tokens[i-1] !~ s:identifier_token && tokens[i-1] != ']' && !(i >= 2 && tokens[i-2] == 'operator')
         " tokens[i] is a less-than operator
+        let i = s:IndexOfMatchingToken(tokens[:i-1], i)
+      elseif s:GetSrcLine(lnum-1) =~ '\V\<'.join(tokens[i-1:i+1], ' ')
+        " In addition, if there's a space before and after the '<' we assume less-than.
+        call s:Debug("less-than: ", tokens[i-1:i+1]);
         let i = s:IndexOfMatchingToken(tokens[:i-1], i)
       else
         " try harder by looking for the matching closing token in ctokens
