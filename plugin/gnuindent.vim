@@ -305,7 +305,7 @@ function! s:SimplifyContext(context, to_keep, ...) "{{{1
   "call s:Debug("            next:", context, m)
   while m[1] != -1
     "call s:Debug("matched:", m)
-    let left = slice(context, 0, m[1])
+    let left = strcharpart(context, 0, m[1])
     if       count(m[0], '(') != count(m[0], ')')
         \ || count(m[0], '{') != count(m[0], '}')
         \ || count(m[0], '[') != count(m[0], ']')
@@ -317,7 +317,7 @@ function! s:SimplifyContext(context, to_keep, ...) "{{{1
       let m = matchstrpos(context, pattern, m[2])
       "call s:Debug("   skipped. next:", context, m)
     else
-      let right = slice(context, m[2])
+      let right = strcharpart(context, m[2])
       let context = left.substitute(m[0], '[^'.a:to_keep.']\+', ' ', 'g').right
       let m = matchstrpos(context, pattern)
       "call s:Debug("simplified. next:", context, m)
@@ -1666,7 +1666,7 @@ function! GnuIndent(...) "{{{1
         let i = j + 1
       endif
     endwhile
-    if lambda_idx == s:WalkBackLambda(tokens + slice(ctokens, 0, i) + moretokens, -1)
+    if lambda_idx == s:WalkBackLambda(tokens + ctokens[:i - len(ctokens) - 1] + moretokens, -1)
       let plnum = s:GetPrevSrcLineMatching(lnum, tokens[lambda_idx:])
       call s:Info("indenting lambda-expression before its compound-statement")
       return s:IndentForAlignment(plnum, '^\s*\zs.*\ze', tokens[lambda_idx:]) + shiftwidth()
