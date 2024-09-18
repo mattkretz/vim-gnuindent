@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright © 2024      GSI Helmholtzzentrum fuer Schwerionenforschung GmbH
+#                       Matthias Kretz <m.kretz@gsi.de>
+
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+
+jobs:
+  vim:
+    strategy:
+      fail-fast: true
+
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install VIM
+        run: sudo apt-get install -y vim
+
+      - name: Run test suite
+        run: |
+          cp test.cpp ci.cpp
+          vim -c 'e ci.cpp' -c 'source plugin/gnuindent.vim' -c 'SetupGnuIndent' -c 'normal "gg=G"' -c 'x'
+          diff -u test.cpp ci.cpp
+
