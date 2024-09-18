@@ -1,5 +1,7 @@
 # gnuindent.vim
 
+[![CI](https://github.com/mattkretz/vim-gnuindent/actions/workflows/CI.yml/badge.svg)](https://github.com/mattkretz/vim-gnuindent/actions/workflows/CI.yml)
+
 This is a replacement for cindent to indent GNU code like in libstdc++. Execute 
 the `SetupGnuIndent` command and you're ready to go. The command sets 
 `indentexpr` to `GnuIndent()` and `indentkeys` to something more helpful. The 
@@ -15,9 +17,16 @@ option).
     cd ~/.vim/pack/mattkretz/start
     git clone https://github.com/mattkretz/vim-gnuindent
 
-## Known Issues / TODO
+## Known Issues
 
-* Indentation of multi-line #defines simply falls back to cindent.
+This indenter has to rely on heuristics rather than a full understanding of the 
+C++ code. Looking at code in isolation (e.g. `a<b`: template argument list or 
+less-than operator?) is never enough. But you don't want to execute a 
+full-blown C++ front-end in vim-script every time vim requests re-indentation. 
+It also needs to be fast enough. Indenting whole files already can be quite 
+slow.
+
+That said, if you find an annoying mis-indentation, please submit an issue.
 
 ## License
 
