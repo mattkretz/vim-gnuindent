@@ -1030,6 +1030,11 @@ f(fd.exponent < 10 || fd.mantissa != 1
 {
   template <typename U>
     simple_tuple(U init)
+    : ::bar::foo<[]<size_t... Is>(is<Is...>){}(make_is<4>())>::x<0> {init}
+    {}
+
+  template <typename U>
+    simple_tuple(U init)
     : x<0> {init}
     {}
 

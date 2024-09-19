@@ -424,6 +424,36 @@ function! GetCxxContextTokens(from, n, ...) "{{{1
   return s:SimplifyAndTokenize(context)
 endfunction
 
+function! s:MatchesBaseClassCtorInheritance(context) "{{{1
+  let tokens = a:context
+  let n = len(tokens)
+  let i = n - 1
+  while n >= 2
+    if n >= 4 && tokens[i] == '>'
+      let j = s:IndexOfMatchingToken(tokens, i)
+      if j == -1
+        return 0
+      endif
+      let j -= 1
+      let n -= i - j
+      let i = j
+    endif
+    if tokens[i] =~ s:identifier
+      if tokens[i-1] == ':'
+        return 1
+      elseif tokens[i-1] == '::'
+        let n -= 2
+        let i -= 2
+        if n >= 1 && tokens[i] == ':'
+          return 1
+        endif
+        continue
+      endif
+    endif
+    return 0
+  endwhile
+endfunction
+
 function! s:SimplifyAndTokenize(context) "{{{1
   let context = a:context
 
@@ -586,8 +616,7 @@ function! s:SimplifyAndTokenize(context) "{{{1
             \ || (tokens[open_idx-1] == ')' && tokens[open_idx-2] == '('
             \       && tokens[open_idx-3] == 'requires')
             \ || (tokens[open_idx-1] =~ s:identifier_token && tokens[open_idx-2] =~ '^[,:]')
-            \ || (tokens[open_idx-1] == '>' && tokens[open_idx-2] == '<'
-            \       && tokens[open_idx-3] =~ s:identifier_token && tokens[open_idx-4] == ':'))
+            \ || s:MatchesBaseClassCtorInheritance(tokens[:open_idx-1]))
         " skip if it matches `, foo{x}` or `: foo{x}` or `: base<x>{y}`, which can occur right
         " before a block with ctors.
         let open_idx = s:IndexOfMatchingToken(tokens, open_idx)
