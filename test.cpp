@@ -1027,4 +1027,14 @@ template <typename>
 f(fd.exponent < 10 || fd.mantissa != 1
     || fd.exponent/64 < (int)std::size(pow10_adjustment_tab));
 
+{
+  template <typename U>
+    simple_tuple(U init)
+    : x<0> {init}
+    {}
+
+  constexpr
+  simple_tuple() = default;
+}
+
 // vim: noet sw=2 ts=8 tw=80

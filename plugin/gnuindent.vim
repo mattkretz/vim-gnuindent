@@ -585,8 +585,10 @@ function! s:SimplifyAndTokenize(context) "{{{1
       while open_idx > 2 && (tokens[open_idx-1] == 'requires' 
             \ || (tokens[open_idx-1] == ')' && tokens[open_idx-2] == '('
             \       && tokens[open_idx-3] == 'requires')
-            \ || (tokens[open_idx-1] =~ s:identifier_token && tokens[open_idx-2] =~ '^[,:]'))
-        " skip if it matches `, foo{x}` or `: foo{x}`, which can occur right
+            \ || (tokens[open_idx-1] =~ s:identifier_token && tokens[open_idx-2] =~ '^[,:]')
+            \ || (tokens[open_idx-1] == '>' && tokens[open_idx-2] == '<'
+            \       && tokens[open_idx-3] =~ s:identifier_token && tokens[open_idx-4] == ':'))
+        " skip if it matches `, foo{x}` or `: foo{x}` or `: base<x>{y}`, which can occur right
         " before a block with ctors.
         let open_idx = s:IndexOfMatchingToken(tokens, open_idx)
         if open_idx != -1
