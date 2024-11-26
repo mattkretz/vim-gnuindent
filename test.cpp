@@ -1042,4 +1042,16 @@ f(fd.exponent < 10 || fd.mantissa != 1
   simple_tuple() = default;
 }
 
+if consteval
+  {
+    if (foo)
+      {
+	x();
+      }
+    else if consteval
+      {
+	foo;
+      }
+  }
+
 // vim: noet sw=2 ts=8 tw=80

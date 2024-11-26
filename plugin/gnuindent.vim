@@ -1167,7 +1167,7 @@ function! GnuIndent(...) "{{{1
   endif
   " if-else / loops {{{2
   if tokens[0] =~ '^\%(if\|else\|do\|for\|while\)$' &&
-      \ tokens[-1] =~ '^\%(else\|do\|)\)$'
+      \ tokens[-1] =~ '^\%(else\|do\|consteval\|)\)$'
     let depth = 0
     let i = 0
     while i < len(tokens) && tokens[i] =~ '^\%(if\|for\|while\|else\|do\)$'
@@ -1183,8 +1183,13 @@ function! GnuIndent(...) "{{{1
           let i += 1
           call s:Debug("condblock depth:", depth, i)
         endif
+      elseif tokens[i+1] == 'consteval'
+        let i += 2
+        let depth += 1
+        call s:Debug("if consteval - depth:", depth, i)
+        break " opening { required after 'if consteval'
       else
-        call s:Debug("parse error in if/for/while")
+        call s:Debug("parse error in if/for/while", tokens)
         break
       endif
     endwhile
