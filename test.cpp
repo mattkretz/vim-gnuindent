@@ -982,6 +982,9 @@ auto f()
     return 1;
   else if (2) [[likely]]
     return 2;
+  else if (3) [[likely]]
+    {
+    }
 }
 
 template <typename>

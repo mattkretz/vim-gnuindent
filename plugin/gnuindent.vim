@@ -727,13 +727,13 @@ function! s:GetPrevSrcLineMatching(lnum, pattern) "{{{1
   let context = line
   while context !~ pattern
     if lnum <= 1
-      call s:Debug("failure searching for", a:lnum, pattern)
+      "call s:Debug("failure searching for", a:lnum, pattern)
       return -1
     endif
     let [lnum, line] = s:GetPrevSrcLine(lnum)
     let context = line.context
   endwhile
-  call s:Debug("found", lnum, "for", a:lnum, pattern)
+  "call s:Debug("found", lnum, "for", a:lnum, pattern)
   return lnum
 endfunction
 
@@ -1167,10 +1167,11 @@ function! GnuIndent(...) "{{{1
   endif
   " if-else / loops {{{2
   if tokens[0] =~ '^\%(if\|else\|do\|for\|while\)$' &&
-      \ tokens[-1] =~ '^\%(else\|do\|consteval\|)\)$'
+      \ tokens[-1] =~ '^\%(else\|do\|consteval\|]\|)\)$'
     let depth = 0
     let i = 0
     while i < len(tokens) && tokens[i] =~ '^\%(if\|for\|while\|else\|do\)$'
+      "call s:Debug("condblock check:", depth, i, tokens[i])
       if tokens[i] == 'else' || tokens[i] == 'do'
         if i+1 == len(tokens) || tokens[i+1] != 'if'
           let depth += 1
@@ -1178,6 +1179,9 @@ function! GnuIndent(...) "{{{1
         let i += 1
       elseif tokens[i+1] == '('
         let i = s:IndexOfMatchingToken(tokens, i + 1)
+        if i != -1 && i+2 < len(tokens) && tokens[i+1] == '[' && tokens[i+2] == '['
+          let i = s:IndexOfMatchingToken(tokens, i + 1)
+        endif
         if i != -1
           let depth += 1
           let i += 1
