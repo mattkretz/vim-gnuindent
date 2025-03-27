@@ -1057,4 +1057,11 @@ if consteval
       }
   }
 
+class foo
+{
+public:
+  foo &
+    x;
+}
+
 // vim: noet sw=2 ts=8 tw=80

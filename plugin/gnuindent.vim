@@ -1814,7 +1814,7 @@ function! GnuIndent(...) "{{{1
         endif
         "s:Debug("restart search at", j+1, tokens[j+1], "found", i)
         let i = s:Index(tokens, s:indent_op_token, j + 1)
-      elseif tokens[i] =~ '^[&*+-]$' && (i == 0
+      elseif tokens[i] =~ '^[&*+-]$' && (i == 0 || i == len(tokens) - 1
           \ || (i > 0 && tokens[i-1] =~ '^\%([([{<]\|'.s:assignment_operators.'\|'.s:compare_operators.'\)$'))
         " unary operator => skip it
         let i = s:Index(tokens, s:indent_op_token, i + 1)
