@@ -1064,4 +1064,9 @@ public:
     x;
 }
 
+return std::ranges::equal(M(k), k)
+	 ? std::ranges::equal(M(!k), !k)x ? Passed
+					  : Fail2
+	 : Fail1;
+
 // vim: noet sw=2 ts=8 tw=80

@@ -1261,7 +1261,7 @@ function! GnuIndent(...) "{{{1
         let j -= 1
       endwhile
       let k = -len(tokens)
-      while k < i && previous !~ '\V'.join(tokens[k:i], '\.\*')
+      while k < i && previous !~ '\V'.join(tokens[k:i], '\.\*').'\s\*'.join(tokens[i+1:j], '\.\*').'\.\*\$'
         let k += 1
       endwhile
       let pattern = '\V'.join(tokens[k:i], '\.\*').'\zs\s\*'.join(tokens[i+1:j], '\.\*').'\.\*\$'
