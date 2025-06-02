@@ -1165,18 +1165,21 @@ function! GnuIndent(...) "{{{1
       return indent(plnum) + shiftwidth() * depth
     endif
   endif
-  " if-else / loops {{{2
-  if tokens[0] =~ '^\%(if\|else\|do\|for\|while\)$' &&
-      \ tokens[-1] =~ '^\%(else\|do\|consteval\|]\|)\)$'
+  " if-else / loops / try / catch {{{2
+  if tokens[0] =~ '^\%(if\|else\|do\|for\|while\|try\|catch\)$' &&
+        \ tokens[-1] =~ '^\%(else\|do\|consteval\|]\|)\|try\)$'
     let depth = 0
     let i = 0
-    while i < len(tokens) && tokens[i] =~ '^\%(if\|for\|while\|else\|do\)$'
+    while i < len(tokens) && tokens[i] =~ '^\%(if\|for\|while\|else\|do\|try\|catch\)$'
       "call s:Debug("condblock check:", depth, i, tokens[i])
       if tokens[i] == 'else' || tokens[i] == 'do'
         if i+1 == len(tokens) || tokens[i+1] != 'if'
           let depth += 1
         endif
         let i += 1
+      elseif tokens == ['try']
+        let depth += 1
+        break
       elseif tokens[i+1] == '('
         let i = s:IndexOfMatchingToken(tokens, i + 1)
         if i != -1 && i+2 < len(tokens) && tokens[i+1] == '[' && tokens[i+2] == '['
