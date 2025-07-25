@@ -1079,5 +1079,11 @@ return std::ranges::equal(M(k), k)
 					  : Fail2
 	 : Fail1;
 
+using _Vp [[foo]]
+  = int;
+
+template <int X = 0>
+  using _Vp [[foo]]
+    = int;
 
 // vim: noet sw=2 ts=8 tw=80
