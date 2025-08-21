@@ -1086,4 +1086,18 @@ template <int X = 0>
   using _Vp [[foo]]
     = int;
 
+void f(auto tup)
+{
+  template for (constexpr auto x : tup)
+    {
+      std::print("{}\n", x);
+    }
+  template for (constexpr auto x : tup)
+    std::print("{}\n", x);
+  template for (constexpr auto x
+		  : tup)
+    template for (constexpr auto x : tup)
+      std::print("{}\n", x);
+}
+
 // vim: noet sw=2 ts=8 tw=80
