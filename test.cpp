@@ -421,6 +421,7 @@ public:
     f();
   }
 
+  [[foo]]
   simd()
   :_M_data(),
    _M_foo{}

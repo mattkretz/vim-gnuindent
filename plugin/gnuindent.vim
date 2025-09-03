@@ -888,6 +888,7 @@ function! s:AdvanceFunctionDecl(tokens, idx) "{{{1
   " Otherwise returns the index after the closing paren of the function argument
   " list.
   let i = s:AdvanceTemplateHead(a:tokens, a:idx)
+  let i = s:AdvanceAttributeSpecifierSeq(a:tokens, i)
   let n = len(a:tokens)
   " return type and stuff
   let maybe_return_type = 0
@@ -1251,7 +1252,7 @@ function! GnuIndent(...) "{{{1
     call s:Info("indent after condblock")
     let plnum = search('^\s*}', 'bnWz', 0, 20)
     return indent(plnum) - shiftwidth()
-  "elseif current =~ '^\s*::\@!' {{{2
+  "elseif current matches whitespace followed by a *single* : {{{2
   elseif current =~ '^\s*::\@!'
     call s:Debug("leading ':', consider ?: alignment, class base type, or ctor initializer list")
     if count(tokens[:-2], '?') > count(tokens, ':')
