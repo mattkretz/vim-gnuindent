@@ -1101,4 +1101,10 @@ void f(auto tup)
       std::print("{}\n", x);
 }
 
+template <int>
+  void f()
+  {}
+
+/* */
+
 // vim: noet sw=2 ts=8 tw=80
